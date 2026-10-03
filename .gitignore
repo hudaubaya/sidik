@@ -7,3 +7,5 @@ sim_build/
 results.xml
 *.vcd
 *.fst
+# simulated characterization runs (measured runs are committed)
+fpga/char/runs/sim-*/

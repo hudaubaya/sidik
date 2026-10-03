@@ -110,8 +110,8 @@ def enroll_stats(mean_delta, kp, n_chips):
     return enr, ok, row
 
 
-def run_sigma(sigma, n_chips, n_recon, n_raw, seed):
-    p = rp.PufParams(sigma_process=sigma)
+def run_sigma(sigma, n_chips, n_recon, n_raw, seed, base=None):
+    p = replace(base or rp.PufParams(), sigma_process=sigma)
     root = np.random.SeedSequence([seed, round(sigma * 1e6)])
     # Children 0..2+len(TAUS) keep their meaning across versions; extra
     # enrollment modes take the children after them.
@@ -196,7 +196,7 @@ def fmt_ber(reliability, n_bits):
     return f"0 (< {3 / n_bits:.1e})" if ber <= 0 else f"{ber:.2e}"
 
 
-def write_tables(results, out):
+def write_tables(results, out, params_from=None):
     lines = [
         "# RO-PUF key generator: Monte Carlo results (model)",
         "",
@@ -204,6 +204,16 @@ def write_tables(results, out):
         "output, not a hardware measurement.** Rates with zero events show the",
         "95 % upper bound (rule of three) in parentheses.",
         "",
+    ]
+    if params_from:
+        lines += [
+            f"Model parameters fitted from {params_from['data']} data "
+            f"(`{params_from['file']}`, {params_from['chips']} chips): "
+            + ", ".join(f"{k} = {params_from['params'][k]:.3g}"
+                        for k in ("sigma_jitter", "sigma_tempco", "tempco")) + ".",
+            "",
+        ]
+    lines += [
         "## Raw 512-pair response (model)",
         "",
         "| σ_process | σ_Δ (counts) | uniformity | uniqueness | reliability 25 °C | "
@@ -320,19 +330,35 @@ def main():
                     help="raw single measurements per chip per temperature")
     ap.add_argument("--seed", type=int, default=20261003)
     ap.add_argument("--jobs", type=int, default=len(SIGMAS))
+    ap.add_argument("--params", type=Path,
+                    help="fit.json from fpga/char/analyze.py: run with the fitted "
+                         "sigma_process, sigma_jitter, sigma_tempco instead of the sweep")
     args = ap.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
 
+    sigmas, base, params_from = SIGMAS, None, None
+    if args.params:
+        fit = json.loads(args.params.read_text())
+        base = rp.PufParams(sigma_jitter=fit["sigma_jitter"],
+                            sigma_tempco=fit["sigma_tempco"],
+                            count_threshold=int(fit["count_threshold"]))
+        if fit.get("tempco_common_fit") is not None:
+            base = replace(base, tempco=fit["tempco_common_fit"])
+        sigmas = (fit["sigma_process"],)
+        params_from = {"file": str(args.params), "data": fit.get("label"),
+                       "chips": fit.get("chips"), "params": asdict(base)}
+
     t0 = time.time()
-    with ProcessPoolExecutor(max_workers=args.jobs) as ex:
-        results = list(ex.map(run_sigma, SIGMAS, [args.chips] * len(SIGMAS),
-                              [args.recon] * len(SIGMAS), [args.raw] * len(SIGMAS),
-                              [args.seed] * len(SIGMAS)))
+    with ProcessPoolExecutor(max_workers=min(args.jobs, len(sigmas))) as ex:
+        results = list(ex.map(run_sigma, sigmas, [args.chips] * len(sigmas),
+                              [args.recon] * len(sigmas), [args.raw] * len(sigmas),
+                              [args.seed] * len(sigmas), [base] * len(sigmas)))
     meta = {
         "label": "model",
+        "params_from": params_from,
         "chips": args.chips, "reconstructions_per_chip": args.recon,
         "raw_measurements_per_temp": args.raw, "seed": args.seed,
-        "sigmas": SIGMAS, "taus": TAUS, "temp_range_c": TEMP_RANGE_C,
+        "sigmas": sigmas, "taus": TAUS, "temp_range_c": TEMP_RANGE_C,
         "enroll_modes": {label: list(t) for label, t in ENROLL_MODES},
         "keygen": asdict(rp.KeyGenParams()),
         "numpy": np.__version__, "python": platform.python_version(),
@@ -340,7 +366,7 @@ def main():
     saved = [{k: v for k, v in r.items() if k != "hist"} for r in results]
     (args.out / "results.json").write_text(
         json.dumps({"meta": meta, "results": saved}, indent=1) + "\n")
-    write_tables(results, args.out)
+    write_tables(results, args.out, params_from)
 
     import puf_plots
     puf_plots.plot_all(results, args.out)
