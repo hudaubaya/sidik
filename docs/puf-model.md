@@ -2,7 +2,9 @@
 
 > **Every number in this document is a model output, not a measurement.**
 > The model parameters are assumptions. Replace them with values measured in
-> `fpga/char/` before quoting any result as a property of real hardware.
+> `fpga/char/` before quoting any result as a property of real hardware:
+> `fpga/char/analyze.py` fits them from race data, and
+> `model/puf_montecarlo.py --params <fit.json>` reruns this study with them.
 
 Code: [`model/ro_puf.py`](../model/ro_puf.py) (chip, measurement, enrollment,
 reconstruction, key/ID/HMAC), [`model/secded.py`](../model/secded.py)

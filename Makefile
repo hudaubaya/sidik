@@ -3,7 +3,7 @@
 
 # SIDIK top-level Makefile.
 #   make install   install Python deps (cocotb, numpy, matplotlib)
-#   make test      run every test (model unit tests + RTL cocotb tests)
+#   make test      run every test (model, characterization and RTL tests)
 #   make puf-model rerun the RO-PUF Monte Carlo (docs/puf-model/)
 #   make clean     remove simulation outputs
 
@@ -12,17 +12,20 @@ SIM    ?= icarus
 
 RTL_TESTS := shaman
 
-.PHONY: all install test test-model test-rtl $(addprefix test-,$(RTL_TESTS)) check-tools puf-model clean
+.PHONY: all install test test-model test-char test-rtl $(addprefix test-,$(RTL_TESTS)) check-tools puf-model clean
 
 all: test
 
 install:
 	$(PYTHON) -m pip install -r requirements.txt
 
-test: test-model test-rtl
+test: test-model test-char test-rtl
 
 test-model:
 	cd model && $(PYTHON) -m unittest discover -v -p 'test_*.py'
+
+test-char:
+	cd fpga/char && PYTHONPATH=../../model $(PYTHON) -m unittest discover -v -p 'test_*.py'
 
 test-rtl: $(addprefix test-,$(RTL_TESTS))
 

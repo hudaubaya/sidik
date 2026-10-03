@@ -28,9 +28,9 @@ plt.rcParams.update({
 })
 
 
-def _finish(fig, title, path):
-    fig.suptitle(f"{title} (model)", x=0.01, ha="left", fontsize=12)
-    fig.text(0.99, 0.01, MODEL_NOTE, ha="right", va="bottom",
+def _finish(fig, title, path, label="model", note=MODEL_NOTE):
+    fig.suptitle(f"{title} ({label})", x=0.01, ha="left", fontsize=12)
+    fig.text(0.99, 0.01, note, ha="right", va="bottom",
              color=INK_2, fontsize=8)
     fig.tight_layout(rect=(0, 0.03, 1, 0.95))
     fig.savefig(path, dpi=150)
@@ -153,7 +153,8 @@ def plot_key_ber(results, out):
 
 
 def plot_hd(results, out, sigma=0.01):
-    r = next(x for x in results if abs(x["sigma_process"] - sigma) < 1e-12)
+    r = min(results, key=lambda x: abs(x["sigma_process"] - sigma))
+    sigma = r["sigma_process"]
     h = r["hist"]
     fig, ax = plt.subplots(figsize=(7, 4.2))
     bins = np.linspace(0, 0.6, 121)
@@ -171,7 +172,8 @@ def plot_hd(results, out, sigma=0.01):
 
 def plot_enroll_modes(results, out):
     labels = list(results[0]["per_tau"][0]["enroll_modes"])
-    fig, axes = plt.subplots(2, len(results), figsize=(13, 7.6), sharey="row")
+    fig, axes = plt.subplots(2, len(results), figsize=(13, 7.6), sharey="row",
+                             squeeze=False)
     offsets = np.linspace(-2.5, 2.5, len(labels))
     for col, r in enumerate(results):
         top, bottom = axes[0, col], axes[1, col]

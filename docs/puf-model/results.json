@@ -1,6 +1,7 @@
 {
  "meta": {
   "label": "model",
+  "params_from": null,
   "chips": 100,
   "reconstructions_per_chip": 1000,
   "raw_measurements_per_temp": 20,
