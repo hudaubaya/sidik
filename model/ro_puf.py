@@ -20,9 +20,10 @@ Measurement
     phase and race; when the first reaches 2^14 the other is sampled.
     delta = count(2i) - count(2i+1), never 0. Response bit = delta > 0.
 
-Enrollment (at T_ref)
-    mean of 16 deltas per pair; mask |mean| >= tau; take the first 216
-    passing pairs; split into 3 blocks of 72 bits; publish the Hsiao
+Enrollment (at each temperature in enroll_temps_c, default T_ref only)
+    mean of 16 deltas per pair per temperature; a pair passes when its sign
+    is the same at every enrollment temperature and |mean| >= tau at each
+    of them; take the first 216 passing pairs; split into 3 blocks of 72 bits; publish the Hsiao
     (72,64) syndrome of each block. Helper data = mask of the 216 pairs
     + 3 x 8-bit syndromes + 32-bit key-check value.
 
@@ -77,6 +78,7 @@ class KeyGenParams:
     n_votes: int = 3
     max_remeasure: int = 3
     kcv_bits: int = 32            # key-check value length; 0 disables it
+    enroll_temps_c: tuple = (25.0,)  # enrollment temperatures, degC
 
     @property
     def n_blocks(self):
@@ -92,9 +94,9 @@ class HelperData:
 
 @dataclass(frozen=True)
 class Enrollment:
-    mean_delta: np.ndarray  # (n_pairs,) float, enrollment mean delta
-    response: np.ndarray    # (n_pairs,) bool, sign of mean delta
-    n_passing: int          # pairs with |mean delta| >= tau
+    mean_delta: np.ndarray  # (n_temps, n_pairs) float, mean delta per temperature
+    response: np.ndarray    # (n_pairs,) bool, sign at the first temperature
+    n_passing: int          # pairs passing the mask
     helper: HelperData      # None if fewer than n_key_bits pairs pass
     key_bits: np.ndarray    # (n_key_bits,) bool, None if enrollment failed
 
@@ -157,15 +159,25 @@ def race(fa, fb, params: PufParams, rng: np.random.Generator, shape=()):
 
 
 def measure_enrollment(chip: Chip, kp: KeyGenParams, rng):
-    """Mean delta of kp.n_enroll races per pair at T_ref."""
-    fa, fb = chip.pair_freqs(chip.params.t_ref_c)
-    d = race(fa, fb, chip.params, rng, shape=(kp.n_enroll, fa.size))
-    return d.mean(axis=0)
+    """Mean delta of kp.n_enroll races per pair at each enrollment temperature.
+
+    Returns (len(kp.enroll_temps_c), n_pairs).
+    """
+    out = []
+    for t in kp.enroll_temps_c:
+        fa, fb = chip.pair_freqs(t)
+        d = race(fa, fb, chip.params, rng, shape=(kp.n_enroll, fa.size))
+        out.append(d.mean(axis=0))
+    return np.array(out)
 
 
 def enroll_from_mean(mean_delta, kp: KeyGenParams) -> Enrollment:
-    response = mean_delta > 0
-    passing = np.flatnonzero(np.abs(mean_delta) >= kp.tau)
+    mean_delta = np.atleast_2d(mean_delta)
+    signs = mean_delta > 0
+    response = signs[0]
+    consistent = (signs == response).all(axis=0)
+    strength = np.abs(mean_delta).min(axis=0)
+    passing = np.flatnonzero(consistent & (strength >= kp.tau))
     if passing.size < kp.n_key_bits:
         return Enrollment(mean_delta, response, passing.size, None, None)
     pairs = passing[:kp.n_key_bits]

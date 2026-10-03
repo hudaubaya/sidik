@@ -169,9 +169,55 @@ def plot_hd(results, out, sigma=0.01):
             out / "hd_hist.png")
 
 
+def plot_enroll_modes(results, out):
+    labels = list(results[0]["per_tau"][0]["enroll_modes"])
+    fig, axes = plt.subplots(2, len(results), figsize=(13, 7.6), sharey="row")
+    offsets = np.linspace(-2.5, 2.5, len(labels))
+    for col, r in enumerate(results):
+        top, bottom = axes[0, col], axes[1, col]
+        for label, c, dx in zip(labels, SERIES, offsets):
+            rows = [(t["tau"], t["enroll_modes"][label]) for t in r["per_tau"]]
+            top.plot([t for t, _ in rows], [m["pairs_passing_mean"] for _, m in rows],
+                     color=c, marker="o", label=f"enrolled at {label}")
+            xs, ys, zx, zy = [], [], [], []
+            for t, m in rows:
+                if not m["enrolled_chips"]:
+                    continue
+                k = m["detected_failures"] + m["silent_wrong_keys"]
+                if k:
+                    xs.append(t)
+                    ys.append(k / m["reconstructions"])
+                else:
+                    zx.append(t + dx)
+                    zy.append(m["zero_event_bound"])
+            bottom.plot(xs, ys, color=c, marker="o")
+            bottom.plot(zx, zy, linestyle="none", marker="v", markerfacecolor=SURFACE,
+                        markeredgecolor=c, markeredgewidth=1.5)
+        top.axhline(216, color=INK_2, linestyle="--", linewidth=1)
+        top.set_title(_sigma_label(r), loc="left", color=INK)
+        top.set_ylim(0, 540)
+        bottom.set_yscale("log")
+        bottom.set_xlabel("mask threshold τ (counts)")
+        for ax in (top, bottom):
+            ax.set_xlim(-6, 134)
+    axes[0, 0].annotate("216 needed", (0, 216), xytext=(2, 4),
+                        textcoords="offset points", color=INK_2, fontsize=9)
+    axes[0, 0].set_ylabel("pairs passing (mean of 512)")
+    axes[1, 0].set_ylabel("failure rate per reconstruction")
+    axes[1, 0].plot([], [], linestyle="none", marker="v", markerfacecolor=SURFACE,
+                    markeredgecolor=INK_2, label="0 observed: 95 % upper bound")
+    handles = axes[0, 0].get_legend_handles_labels()
+    extra = axes[1, 0].get_legend_handles_labels()
+    axes[0, 0].legend(handles[0] + extra[0], handles[1] + extra[1],
+                      loc="lower left", fontsize=8)
+    _finish(fig, "Enrollment at one vs two temperatures, KCV on, T ~ U(−40, 85) °C",
+            out / "enroll_modes.png")
+
+
 def plot_all(results, out):
     plot_pairs(results, out)
     plot_failures(results, out)
     plot_reliability(results, out)
     plot_key_ber(results, out)
     plot_hd(results, out)
+    plot_enroll_modes(results, out)
