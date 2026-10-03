@@ -4,23 +4,24 @@
 # SIDIK top-level Makefile.
 #   make install   install Python deps (cocotb, numpy, matplotlib)
 #   make test      run every test (model, characterization and RTL tests)
-#   make synth-check  generic yosys synthesis of rtl/ropuf (needs yosys)
+#   make synth-check  generic yosys synthesis of rtl/ropuf and rtl/secded72.v
+#   make test-mutants mutation check of the secded72 testbench
 #   make puf-model rerun the RO-PUF Monte Carlo (docs/puf-model/)
 #   make clean     remove simulation outputs
 
 PYTHON ?= python3
 SIM    ?= icarus
 
-RTL_TESTS := shaman ropuf
+RTL_TESTS := shaman ropuf secded72
 
-.PHONY: all install test test-model test-char test-rtl $(addprefix test-,$(RTL_TESTS)) check-tools synth-check puf-model clean
+.PHONY: all install test test-model test-char test-rtl $(addprefix test-,$(RTL_TESTS)) check-tools test-mutants synth-check puf-model clean
 
 all: test
 
 install:
 	$(PYTHON) -m pip install -r requirements.txt
 
-test: test-model test-char test-rtl
+test: test-model test-char test-rtl test-mutants
 
 test-model:
 	cd model && $(PYTHON) -m unittest discover -v -p 'test_*.py'
@@ -34,9 +35,14 @@ $(addprefix test-,$(RTL_TESTS)): test-%: check-tools
 	$(MAKE) -C tb/$* SIM=$(SIM)
 	@! grep -q '<failure' tb/$*/results.xml || { echo "FAIL: tb/$*"; exit 1; }
 
+test-mutants: check-tools
+	$(PYTHON) tb/secded72/mutants.py
+
 synth-check:
 	@command -v yosys >/dev/null || { echo "yosys not found (apt install yosys)"; exit 1; }
 	$(PYTHON) rtl/ropuf/synth_check.py
+	yosys -q -p "read_verilog rtl/secded72.v; synth -top secded72; check -assert"
+	@echo "OK, rtl/secded72.v synthesizes cleanly"
 
 puf-model:
 	$(PYTHON) model/puf_montecarlo.py --out docs/puf-model

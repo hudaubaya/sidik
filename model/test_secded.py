@@ -15,11 +15,18 @@ class SecdedTest(unittest.TestCase):
         self.word = rng.random(secded.N) < 0.5
         self.helper = secded.syndrome(self.word)
 
-    def test_columns_distinct_and_odd(self):
+    def test_columns_are_extended_hamming(self):
         cols = secded.COLUMNS.tolist()
         self.assertEqual(len(cols), 72)
         self.assertEqual(len(set(cols)), 72)
-        self.assertTrue(all(bin(c).count("1") % 2 == 1 for c in cols))
+        # bit 7 = overall parity, bits 6..0 = bit position
+        self.assertEqual(cols, [0x80 | j for j in range(72)])
+
+    def test_single_error_syndrome_is_position(self):
+        for j in range(secded.N):
+            e = np.zeros(secded.N, dtype=bool)
+            e[j] = True
+            self.assertEqual(int(secded.syndrome(e)), 0x80 | j)
 
     def test_no_error(self):
         out, det = secded.decode(self.word, self.helper)

@@ -1,22 +1,32 @@
 # SPDX-FileCopyrightText: 2026 Universitas Sriwijaya
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Hsiao (72,64) SECDED code, used as a syndrome secure sketch.
+"""Extended Hamming (72,64) SECDED code, used as a syndrome secure sketch.
+
+Same principle as the Hamming code of ECC_test1: the syndrome of a single
+error is the position of the bit in error. Bit j of a 72-bit word (j = 0..71)
+has parity-check column
+
+    h_j = 0x80 | j
+
+i.e. syndrome bits 6..0 are the binary position j (a Hamming (127,120) code
+shortened to positions 0..71) and syndrome bit 7 is the overall parity of
+the word. Position 0 is the overall-parity bit, whose column is 0x80 alone.
 
 The PUF never encodes data with this code. Enrollment publishes the 8-bit
 syndrome H·w of each 72-bit response block w; reconstruction computes
 H·w' xor helper = H·e and decodes the error pattern e from it:
 
-  * syndrome 0                 -> no error
-  * syndrome equal to column j -> single-bit error at j, corrected
-  * anything else              -> uncorrectable error detected
-                                  (every 2-bit error lands here)
+  * syndrome 0                          -> no error
+  * bit 7 set, bits 6..0 = j <= 71      -> single-bit error at j, corrected
+  * bit 7 set, bits 6..0 > 71           -> uncorrectable, detected
+  * bit 7 clear, bits 6..0 != 0         -> uncorrectable, detected
+                                           (every 2-bit error lands here)
 
 Three or more errors can alias to a column and be miscorrected silently;
 that is inherent to SECDED and is counted separately by the Monte Carlo.
+rtl/secded72.v implements the same code and is checked against this file.
 """
-
-from itertools import combinations
 
 import numpy as np
 
@@ -29,12 +39,8 @@ DETECTED = -2
 
 
 def _columns():
-    # Hsiao: all columns distinct with odd weight. 56 weight-3 + 8 weight-5
-    # columns for data, 8 weight-1 columns for the check bits.
-    w3 = [sum(1 << b for b in c) for c in combinations(range(R), 3)]
-    w5 = [sum(1 << b for b in c) for c in combinations(range(R), 5)][:K - len(w3)]
-    w1 = [1 << b for b in range(R)]
-    return w3 + w5 + w1
+    # Extended Hamming: syndrome bits 6..0 = position, bit 7 = overall parity.
+    return [0x80 | j for j in range(N)]
 
 
 COLUMNS = np.array(_columns(), dtype=np.int64)
