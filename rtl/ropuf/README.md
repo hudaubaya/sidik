@@ -128,6 +128,7 @@ None of these steps can be done or checked from this repository yet:
   flip-flop runs at f_RO; the counter runs at f_RO/2^PRESCALE_LOG2. If timing
   still fails, raise `PRESCALE_LOG2` (coarser Δ) or `N_STAGES` (slower RO).
   The achievable RO frequency is unknown until measured.
-- **Integration.** Add the core to the Platform Designer system (e.g. HPS
-  lightweight bridge on DE10-Nano) and implement `HardwareBackend` in
-  `fpga/char/acquire.py`.
+- **Integration.** `fpga/char/quartus/` integrates the core on the
+  DE10-Nano behind a JTAG to Avalon master, with a LogicLock region and an
+  SDC for the points above; it has not been compiled yet. Steps:
+  [`docs/char_howto.md`](../../docs/char_howto.md).

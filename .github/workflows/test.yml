@@ -25,10 +25,10 @@ jobs:
           cache: pip
           cache-dependency-path: requirements.txt
 
-      - name: Install Icarus Verilog and Yosys
+      - name: Install Icarus Verilog, Yosys and Tcl
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends iverilog yosys
+          sudo apt-get install -y --no-install-recommends iverilog yosys tcl
           iverilog -V 2>&1 | head -1
           yosys -V
 

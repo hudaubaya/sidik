@@ -52,21 +52,21 @@ class Backend:
 
 
 class HardwareBackend(Backend):
-    """Placeholder until rtl/ropuf is integrated into an FPGA design.
+    """Placeholder for an automated chamber / supply setup.
 
-    Implement set_condition() for the temperature chamber / supply and
-    measure() with the register sequence in rtl/ropuf/README.md, and report
-    delta_magnitude_bias = -3.0 in meta(). Until then, any external tool can
-    write the deltas.csv / meta.json format directly.
+    Board data is recorded with fpga/char/syscon/measure_pairs.tcl (System
+    Console) and converted with `sw/analyze.py --export-run`; see
+    docs/char_howto.md. Implement set_condition() and measure() here only to
+    drive a temperature chamber from Python.
     """
 
     source = "hardware"
 
     def __init__(self, *_, **__):
         raise NotImplementedError(
-            "No hardware backend yet: rtl/ropuf is not integrated into an FPGA design. "
-            "Write deltas.csv + meta.json with your own tool, or implement "
-            "HardwareBackend in fpga/char/acquire.py.")
+            "No Python hardware backend: record races with "
+            "fpga/char/syscon/measure_pairs.tcl and convert them with "
+            "`sw/analyze.py --export-run` (docs/char_howto.md).")
 
 
 @dataclass(frozen=True)
