@@ -106,6 +106,13 @@ class FormatTest(unittest.TestCase):
                     shape=(2000,))
         self.assertAlmostEqual(float(analyze.to_x(d, n).mean()), np.log(fb / fa), 5)
 
+    def test_bias_parameter(self):
+        n = 2 ** 14
+        d = np.array([100, -100])
+        x0 = analyze.to_x(d, n, bias=0.0)
+        x1 = analyze.to_x(d, n, bias=-1.5)
+        np.testing.assert_allclose(np.abs(x1) - np.abs(x0), 1.5 / n, rtol=0.05)
+
     def test_hardware_backend_is_not_implemented(self):
         with self.assertRaises(NotImplementedError):
             acquire.HardwareBackend()

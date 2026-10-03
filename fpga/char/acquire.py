@@ -52,19 +52,19 @@ class Backend:
 
 
 class HardwareBackend(Backend):
-    """Placeholder: there is no RO-PUF RTL or register map in SIDIK yet.
+    """Placeholder until rtl/ropuf is integrated into an FPGA design.
 
     Implement set_condition() for the temperature chamber / supply and
-    measure() for the board interface once rtl/ has the RO-PUF and its
-    register map is fixed. Until then, any external tool can write the
-    deltas.csv / meta.json format directly.
+    measure() with the register sequence in rtl/ropuf/README.md, and report
+    delta_magnitude_bias = -1.5 in meta(). Until then, any external tool can
+    write the deltas.csv / meta.json format directly.
     """
 
     source = "hardware"
 
     def __init__(self, *_, **__):
         raise NotImplementedError(
-            "No hardware backend yet: SIDIK has no RO-PUF RTL or register map. "
+            "No hardware backend yet: rtl/ropuf is not integrated into an FPGA design. "
             "Write deltas.csv + meta.json with your own tool, or implement "
             "HardwareBackend in fpga/char/acquire.py.")
 

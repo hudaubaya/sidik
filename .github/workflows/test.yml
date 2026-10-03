@@ -25,17 +25,21 @@ jobs:
           cache: pip
           cache-dependency-path: requirements.txt
 
-      - name: Install Icarus Verilog
+      - name: Install Icarus Verilog and Yosys
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends iverilog
+          sudo apt-get install -y --no-install-recommends iverilog yosys
           iverilog -V 2>&1 | head -1
+          yosys -V
 
       - name: Install Python dependencies
         run: make install
 
       - name: Run tests
         run: make test
+
+      - name: Synthesis check (RO stages preserved)
+        run: make synth-check
 
       - name: Upload cocotb results
         if: always()

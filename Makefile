@@ -4,15 +4,16 @@
 # SIDIK top-level Makefile.
 #   make install   install Python deps (cocotb, numpy, matplotlib)
 #   make test      run every test (model, characterization and RTL tests)
+#   make synth-check  generic yosys synthesis of rtl/ropuf (needs yosys)
 #   make puf-model rerun the RO-PUF Monte Carlo (docs/puf-model/)
 #   make clean     remove simulation outputs
 
 PYTHON ?= python3
 SIM    ?= icarus
 
-RTL_TESTS := shaman
+RTL_TESTS := shaman ropuf
 
-.PHONY: all install test test-model test-char test-rtl $(addprefix test-,$(RTL_TESTS)) check-tools puf-model clean
+.PHONY: all install test test-model test-char test-rtl $(addprefix test-,$(RTL_TESTS)) check-tools synth-check puf-model clean
 
 all: test
 
@@ -32,6 +33,10 @@ test-rtl: $(addprefix test-,$(RTL_TESTS))
 $(addprefix test-,$(RTL_TESTS)): test-%: check-tools
 	$(MAKE) -C tb/$* SIM=$(SIM)
 	@! grep -q '<failure' tb/$*/results.xml || { echo "FAIL: tb/$*"; exit 1; }
+
+synth-check:
+	@command -v yosys >/dev/null || { echo "yosys not found (apt install yosys)"; exit 1; }
+	$(PYTHON) rtl/ropuf/synth_check.py
 
 puf-model:
 	$(PYTHON) model/puf_montecarlo.py --out docs/puf-model

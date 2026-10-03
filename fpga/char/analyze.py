@@ -16,8 +16,9 @@ writes into <run>/analysis/:
 
 Every race is converted to x = ln(f_a / f_b), which the counts give
 directly: x = -ln(1 - delta'/N) when RO 2i wins, ln(1 + delta'/N) otherwise
-(N = counter threshold, delta' = delta - 0.5 sign(delta) removes the half
-count the losing counter misses on average). In x the model is
+(N = counter threshold, delta' = delta - b sign(delta) removes the
+measurement's bias b on |delta|: +0.5 counts for the model's race(), about
+-1.5 for rtl/ropuf; set it as delta_magnitude_bias in meta.json). In x the model is
 
   x(T) = x0 + s * u(T),  u(T) = (T - T_ref) / (1 + k0 (T - T_ref))
 
@@ -58,6 +59,7 @@ class RunData:
         self.source = self.meta.get("source", "hardware")
         self.label = LABELS.get(self.source, self.source)
         self.n = int(self.meta["count_threshold"])
+        self.bias = float(self.meta.get("delta_magnitude_bias", DEFAULT_DELTA_BIAS))
         a = np.loadtxt(self.run / "deltas.csv", delimiter=",", skiprows=1, ndmin=2)
         chip, temp, vdd, rep, pair, delta = a.T
         vdd = np.where(np.isnan(vdd), -1.0, vdd)
@@ -84,15 +86,17 @@ class RunData:
         return float(self.temps[self.kref])
 
 
-def to_x(delta, n):
+DEFAULT_DELTA_BIAS = 0.5  # model race(): loser misses half a count on average
+
+
+def to_x(delta, n, bias=DEFAULT_DELTA_BIAS):
     """Counts -> x = ln(f_a / f_b).
 
-    The winning counter stops exactly at n while the loser's count is low by
-    half a count on average (random start phases), so |delta| is biased up
-    by 0.5; that is removed first.
+    `bias` is the mean excess of |delta| over n |1 - f_slow/f_fast| for the
+    measurement circuit; it is removed first.
     """
     delta = np.asarray(delta, dtype=float)
-    d = (delta - 0.5 * np.sign(delta)) / n
+    d = (delta - bias * np.sign(delta)) / n
     return np.where(d > 0, -np.log1p(-np.minimum(d, 1 - 1e-12)), np.log1p(d))
 
 
@@ -166,7 +170,7 @@ def chi2_dof_threshold(dof, z=Z_LINEARITY):
 def analyze(run: RunData):
     n, temps, kref = run.n, run.temps, run.kref
     q = quantisation_variance(n)
-    xs = [to_x(run.d[c], n) for c in range(run.chips.size)]
+    xs = [to_x(run.d[c], n, run.bias) for c in range(run.chips.size)]
     k0 = fit_k0([x.mean(axis=1) for x in xs],
                 [x.var(axis=1, ddof=1).mean(axis=1) for x in xs],
                 temps, run.t_ref, run.d.shape[2])
@@ -193,6 +197,7 @@ def analyze(run: RunData):
         "t_ref_c": run.t_ref,
         "vdd_v": None if run.vdd < 0 else run.vdd,
         "quantisation_variance_x": q,
+        "delta_magnitude_bias": run.bias,
         "tempco_common_fit": k0 if temps.size >= 3 else None,
         "uniformity_mean": float(ref.mean()),
         "uniformity_per_chip": ref.mean(axis=1).tolist(),
