@@ -3,7 +3,7 @@
 
 # SIDIK top-level Makefile.
 #   make install   install Python deps (cocotb, numpy, matplotlib)
-#   make test      run every test (model, characterization and RTL tests)
+#   make test      run every test (model, characterization, sw and RTL tests)
 #   make synth-check  yosys synthesis of the RO-PUF and secded72; compile-check
 #                     the CYCLONEV path of rtl/ro_cell.v
 #   make test-mutants mutation check of the secded72 testbench
@@ -15,20 +15,23 @@ SIM    ?= icarus
 
 RTL_TESTS := shaman ropuf puf_meas secded72
 
-.PHONY: all install test test-model test-char test-rtl $(addprefix test-,$(RTL_TESTS)) check-tools test-mutants synth-check puf-model clean
+.PHONY: all install test test-model test-char test-sw test-rtl $(addprefix test-,$(RTL_TESTS)) check-tools test-mutants synth-check puf-model clean
 
 all: test
 
 install:
 	$(PYTHON) -m pip install -r requirements.txt
 
-test: test-model test-char test-rtl test-mutants
+test: test-model test-char test-sw test-rtl test-mutants
 
 test-model:
 	cd model && $(PYTHON) -m unittest discover -v -p 'test_*.py'
 
 test-char:
 	cd fpga/char && PYTHONPATH=../../model $(PYTHON) -m unittest discover -v -p 'test_*.py'
+
+test-sw:
+	cd sw && PYTHONPATH=../model $(PYTHON) -m unittest discover -v -p 'test_*.py'
 
 test-rtl: $(addprefix test-,$(RTL_TESTS))
 

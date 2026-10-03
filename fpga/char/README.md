@@ -3,11 +3,14 @@
 Scripts that turn RO-pair race measurements into the parameters of the PUF
 model (`model/ro_puf.py`) and into response-quality metrics.
 
-> **Status:** `rtl/ropuf` and its register map exist, but there is no
-> hardware acquisition backend yet (it needs the RO-PUF integrated into an
-> FPGA design and a way to reach its registers). Everything below runs end to end on
-> **simulated** data from the model, and every report says so. Hardware data
-> can be fed in now if another tool writes the run format below.
+> **Status:** the hardware path exists but has not run on a board yet:
+> a Quartus project for the DE10-Nano (`quartus/`), a System Console script
+> that records raw counter values (`syscon/measure_pairs.tcl`) and
+> `sw/analyze.py`, which computes the model's metrics from those CSVs and
+> exports them to the run format below. Steps for the team:
+> [`docs/char_howto.md`](../../docs/char_howto.md). Everything below still
+> runs end to end on **simulated** data from the model, and every report
+> says so.
 
 ## Workflow
 
@@ -24,7 +27,11 @@ python3 model/puf_montecarlo.py --params fpga/char/runs/sim-demo/analysis/fit.js
     --out fpga/char/runs/sim-demo/montecarlo
 ```
 
-`make test-char` runs the checks (also part of `make test`).
+`make test-char` runs the checks (also part of `make test`), including
+`test_quartus.py`: offline consistency checks of the Quartus project and the
+System Console script (names in QSF/SDC exist in the RTL, the top level
+compiles, the script follows the register protocol against a mock). They do
+not replace a Quartus compile.
 
 ## Run format
 
@@ -76,13 +83,15 @@ more than 20 % of pairs flagged as non-linear.
   before measuring. Record the actual die temperature if the FPGA has a
   sensor.
 
-## Adding hardware
+## Hardware data
 
-Implement `HardwareBackend` in `acquire.py`:
-- `set_condition(chip, temp_c, vdd_v)` sets the chamber or supply and waits.
-- `measure(chip, n_reps)` returns an `(n_reps, n_pairs)` array of deltas
-  read from the board.
+Record raw races with `syscon/measure_pairs.tcl`, then convert them:
 
-The register map is in `rtl/ropuf/README.md`: write PAIR, write CTRL=1,
-poll CTRL until BUSY clears, read DELTA. Hardware runs with this RTL should
-set `delta_magnitude_bias` to −3.0 in `meta.json`.
+```sh
+python3 sw/analyze.py <raw csv files> --export-run fpga/char/runs/<date>-<board>
+```
+
+This writes `deltas.csv` and a `meta.json` with `delta_magnitude_bias` =
+−3.0 (the `rtl/ropuf` race); add the board serial, bitstream hash and
+conditions to it. `HardwareBackend` in `acquire.py` remains a stub for a
+future automated chamber setup.

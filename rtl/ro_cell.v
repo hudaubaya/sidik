@@ -25,8 +25,11 @@
 // Placement of the ROs is not part of this file.
 module ro_cell #(
     parameter integer N_STAGES = 5,
-    parameter integer INDEX = 0,
-    parameter real    HALF_PERIOD_NS = 0.0  // SIM only; 0 = from RO_SEED
+    parameter integer INDEX = 0
+`ifdef SIM
+    // Behavioural model only, so synthesis tools never see a real parameter.
+    , parameter real  HALF_PERIOD_NS = 0.0  // 0 = from RO_SEED
+`endif
 ) (
     input  wire en,
     output wire out

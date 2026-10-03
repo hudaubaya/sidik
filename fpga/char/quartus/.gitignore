@@ -1,0 +1,22 @@
+# SPDX-FileCopyrightText: 2026 Universitas Sriwijaya
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+# Quartus / Platform Designer outputs (regenerate with build.sh)
+db/
+incremental_db/
+output_files/
+qdb/
+greybox_tmp/
+char_sys/
+char_sys.qsys
+char_sys.sopcinfo
+.qsys_edit/
+*.qws
+*.rpt
+*.summary
+*.smsg
+*.done
+*.jdi
+*.pin
+*.sld
+c5_pin_model_dump.txt
