@@ -24,15 +24,18 @@ Enrollment (at T_ref)
     mean of 16 deltas per pair; mask |mean| >= tau; take the first 216
     passing pairs; split into 3 blocks of 72 bits; publish the Hsiao
     (72,64) syndrome of each block. Helper data = mask of the 216 pairs
-    + 3 x 8-bit syndromes.
+    + 3 x 8-bit syndromes + 32-bit key-check value.
 
 Reconstruction
     3 measurements per pair, majority vote; per block: correct 1 bit, on a
-    detected uncorrectable error re-measure that block (3 votes again), at
-    most 3 re-measurements. Any block still uncorrectable -> failure.
+    detected uncorrectable error re-measure that block (3 votes again).
+    When every block decodes but the key-check value does not match (a
+    SECDED miscorrection), re-measure all blocks. At most 3 re-measurement
+    rounds; a block still uncorrectable or a key-check mismatch -> failure.
 
 Key and identity
     K   = SHA-256(216 key bits, MSB first, || "SIDIK-K")
+    KCV = first 32 bits of HMAC-SHA256(K, "SIDIK-CHK")
     ID  = HMAC-SHA256(K, "SIDIK-ID")
     tag = HMAC-SHA256(K, challenge)
 """
@@ -47,6 +50,7 @@ import secded
 
 KEY_DOMAIN = b"SIDIK-K"
 ID_DOMAIN = b"SIDIK-ID"
+KCV_DOMAIN = b"SIDIK-CHK"
 
 
 @dataclass(frozen=True)
@@ -72,6 +76,7 @@ class KeyGenParams:
     n_key_bits: int = 216
     n_votes: int = 3
     max_remeasure: int = 3
+    kcv_bits: int = 32            # key-check value length; 0 disables it
 
     @property
     def n_blocks(self):
@@ -82,6 +87,7 @@ class KeyGenParams:
 class HelperData:
     pairs: np.ndarray       # indices of the 216 selected pairs (from the mask)
     syndromes: np.ndarray   # (n_blocks,) int
+    kcv: bytes = b""        # key-check value, kcv_bits // 8 bytes
 
 
 @dataclass(frozen=True)
@@ -102,6 +108,7 @@ class Reconstruction:
     key_bits: np.ndarray    # (R, n_key_bits) bool
     failed: np.ndarray      # (R,) bool, uncorrectable after all re-measurements
     attempts: np.ndarray    # (R,) int, 1 + number of re-measurement rounds
+    kcv_caught: np.ndarray  # (R,) bool, a key-check mismatch occurred
     first_votes: np.ndarray  # (R, n_votes, n_key_bits) bool, first attempt
 
 
@@ -164,8 +171,9 @@ def enroll_from_mean(mean_delta, kp: KeyGenParams) -> Enrollment:
     pairs = passing[:kp.n_key_bits]
     key_bits = response[pairs]
     syn = secded.syndrome(key_bits.reshape(kp.n_blocks, secded.N))
+    kcv = key_check_value(derive_key(key_bits), kp.kcv_bits)
     return Enrollment(mean_delta, response, passing.size,
-                      HelperData(pairs, syn), key_bits)
+                      HelperData(pairs, syn, kcv), key_bits)
 
 
 def enroll(chip: Chip, kp: KeyGenParams, rng) -> Enrollment:
@@ -190,10 +198,21 @@ def reconstruct(chip: Chip, helper: HelperData, temps_c, kp: KeyGenParams,
     votes, maj = _majority(fa, fb, kp.n_votes, chip.params, rng)
     words, detected = secded.decode(maj.reshape(n_rec, nb, n), helper.syndromes)
     attempts = np.ones(n_rec, dtype=np.int64)
+    kcv_bad = np.zeros(n_rec, dtype=bool)
+
+    def check(rows):
+        # Key-check only reconstructions whose blocks all decoded.
+        rows = rows[~detected[rows].any(axis=1)]
+        kcv_bad[rows] = ~_kcv_matches(words[rows].reshape(rows.size, nb * n),
+                                      helper.kcv, kp.kcv_bits)
+
+    check(np.arange(n_rec))
+    kcv_caught = kcv_bad.copy()
 
     cols = np.arange(n)
     for _ in range(kp.max_remeasure):
-        r_idx, b_idx = np.nonzero(detected)
+        redo = detected | kcv_bad[:, None]  # KCV mismatch: redo every block
+        r_idx, b_idx = np.nonzero(redo)
         if r_idx.size == 0:
             break
         sel = b_idx[:, None] * n + cols  # (M, 72) pair columns of each block
@@ -202,15 +221,38 @@ def reconstruct(chip: Chip, helper: HelperData, temps_c, kp: KeyGenParams,
         w, d = secded.decode(m, helper.syndromes[b_idx])
         words[r_idx, b_idx] = w
         detected[r_idx, b_idx] = d
-        attempts[np.unique(r_idx)] += 1
+        rows = np.unique(r_idx)
+        attempts[rows] += 1
+        kcv_bad[rows] = False
+        check(rows)
+        kcv_caught |= kcv_bad
 
-    return Reconstruction(words.reshape(n_rec, nb * n), detected.any(axis=1),
-                          attempts, votes)
+    return Reconstruction(key_bits=words.reshape(n_rec, nb * n),
+                          failed=detected.any(axis=1) | kcv_bad,
+                          attempts=attempts, kcv_caught=kcv_caught,
+                          first_votes=votes)
 
 
 def derive_key(key_bits) -> bytes:
     bits = np.asarray(key_bits, dtype=bool)
     return hashlib.sha256(np.packbits(bits).tobytes() + KEY_DOMAIN).digest()
+
+
+def key_check_value(key: bytes, kcv_bits: int) -> bytes:
+    if kcv_bits % 8:
+        raise ValueError("kcv_bits must be a multiple of 8")
+    return hmac.new(key, KCV_DOMAIN, hashlib.sha256).digest()[:kcv_bits // 8]
+
+
+def _kcv_matches(key_bits_rows, kcv: bytes, kcv_bits: int):
+    """(M, n_key_bits) candidate key bits -> (M,) bool."""
+    if kcv_bits == 0:
+        return np.ones(len(key_bits_rows), dtype=bool)
+    packed = np.packbits(key_bits_rows, axis=1)
+    return np.array([
+        key_check_value(hashlib.sha256(row.tobytes() + KEY_DOMAIN).digest(),
+                        kcv_bits) == kcv
+        for row in packed], dtype=bool)
 
 
 def device_id(key: bytes) -> bytes:

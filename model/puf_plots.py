@@ -67,7 +67,7 @@ def plot_pairs(results, out):
             out / "pairs_passing.png")
 
 
-def _rate_panel(ax, results, key, title):
+def _rate_panel(ax, results, key, title, variant=None):
     # Zero-event markers share one bound per tau; offset them per series.
     offsets = np.linspace(-2.5, 2.5, len(results))
     for r, c, dx in zip(results, SERIES, offsets):
@@ -75,7 +75,7 @@ def _rate_panel(ax, results, key, title):
         for x in r["per_tau"]:
             if not x["enrolled_chips"]:
                 continue
-            k, n = x[key], x["reconstructions"]
+            k, n = (x[variant] if variant else x)[key], x["reconstructions"]
             if k:
                 xs.append(x["tau"])
                 ys.append(k / n)
@@ -91,9 +91,13 @@ def _rate_panel(ax, results, key, title):
 
 
 def plot_failures(results, out):
-    fig, axes = plt.subplots(1, 2, figsize=(10, 4.2), sharey=True)
-    _rate_panel(axes[0], results, "detected_failures", "Detected failure")
-    _rate_panel(axes[1], results, "silent_wrong_keys", "Silent wrong key")
+    fig, axes = plt.subplots(1, 3, figsize=(13, 4.4), sharey=True)
+    _rate_panel(axes[0], results, "detected_failures",
+                "No KCV: detected failure", "without_kcv")
+    _rate_panel(axes[1], results, "silent_wrong_keys",
+                "No KCV: silent wrong key", "without_kcv")
+    _rate_panel(axes[2], results, "detected_failures",
+                "32-bit KCV: detected failure\n(silent wrong key: 0 observed in every case)")
     axes[0].set_ylabel("rate per reconstruction")
     axes[0].plot([], [], linestyle="none", marker="v", markerfacecolor=SURFACE,
                  markeredgecolor=INK_2, label="0 observed: 95 % upper bound")

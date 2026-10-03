@@ -3,6 +3,7 @@
 
 import hashlib
 import hmac
+import itertools
 import unittest
 from dataclasses import replace
 
@@ -87,6 +88,54 @@ class KeyGenTest(unittest.TestCase):
         r = rp.reconstruct(self.chip, e.helper, temps, self.kp, self.rng)
         self.assertFalse(r.failed.any())
         self.assertTrue((r.key_bits == e.key_bits).all())
+
+
+def _miscorrecting_triple():
+    """Three block positions whose combined syndrome equals another column."""
+    cols = secded.COLUMNS.tolist()
+    for i, j, k in itertools.combinations(range(secded.N), 3):
+        if cols[i] ^ cols[j] ^ cols[k] in cols:
+            return [i, j, k]
+    raise AssertionError("no miscorrecting triple")
+
+
+class KeyCheckTest(unittest.TestCase):
+    def setUp(self):
+        self.rng = np.random.default_rng(5)
+        self.kp = rp.KeyGenParams()
+
+    def _chip_with_three_errors(self, kp):
+        chip = rp.Chip(QUIET, self.rng)
+        e = rp.enroll(chip, kp, self.rng)
+        for j in e.helper.pairs[_miscorrecting_triple()]:  # block 0
+            chip.f_nom[[2 * j, 2 * j + 1]] = chip.f_nom[[2 * j + 1, 2 * j]]
+        return chip, e
+
+    def test_helper_carries_kcv(self):
+        chip = rp.Chip(rp.PufParams(), self.rng)
+        e = rp.enroll(chip, self.kp, self.rng)
+        key = rp.derive_key(e.key_bits)
+        self.assertEqual(len(e.helper.kcv), 4)
+        self.assertEqual(e.helper.kcv,
+                         hmac.new(key, b"SIDIK-CHK", hashlib.sha256).digest()[:4])
+
+    def test_miscorrection_is_silent_without_kcv(self):
+        kp = replace(self.kp, kcv_bits=0)
+        chip, e = self._chip_with_three_errors(kp)
+        r = rp.reconstruct(chip, e.helper, np.full(5, 25.0), kp, self.rng)
+        self.assertFalse(r.failed.any())
+        self.assertTrue((r.key_bits != e.key_bits).any(axis=1).all())
+
+    def test_miscorrection_is_caught_with_kcv(self):
+        chip, e = self._chip_with_three_errors(self.kp)
+        r = rp.reconstruct(chip, e.helper, np.full(5, 25.0), self.kp, self.rng)
+        self.assertTrue(r.failed.all())
+        self.assertTrue(r.kcv_caught.all())
+        self.assertTrue((r.attempts == 1 + self.kp.max_remeasure).all())
+
+    def test_kcv_length_must_be_bytes(self):
+        with self.assertRaises(ValueError):
+            rp.key_check_value(b"k" * 32, 12)
 
 
 class KeyDerivationTest(unittest.TestCase):

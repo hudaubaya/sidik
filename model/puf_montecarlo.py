@@ -14,7 +14,7 @@ import json
 import platform
 import time
 from concurrent.futures import ProcessPoolExecutor
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 
 import numpy as np
@@ -39,6 +39,47 @@ def pairwise_hd(bits):
 def zero_bound(n):
     """95 % upper bound on a rate with 0 events in n trials (rule of three)."""
     return 3.0 / n
+
+
+def run_reconstructions(chips, mean_delta, ok, seeds, kp, n_recon):
+    n_tot = n_fail = n_silent = n_retry = n_caught = n_recovered = 0
+    attempts_sum = single_err = maj_err = n_bits = 0
+    worst_chip_fail = chips_with_fail = 0
+    for i in ok:
+        e = rp.enroll_from_mean(mean_delta[i], kp)
+        rng = np.random.default_rng(seeds[i])
+        temps = rng.uniform(*TEMP_RANGE_C, n_recon)
+        r = rp.reconstruct(chips[i], e.helper, temps, kp, rng)
+        wrong = (r.key_bits != e.key_bits).any(axis=1)
+        n_tot += n_recon
+        n_fail += int(r.failed.sum())
+        n_silent += int((wrong & ~r.failed).sum())
+        n_retry += int((r.attempts > 1).sum())
+        n_caught += int(r.kcv_caught.sum())
+        n_recovered += int((r.kcv_caught & ~r.failed & ~wrong).sum())
+        attempts_sum += int(r.attempts.sum())
+        chip_fail = int((r.failed | wrong).sum())
+        worst_chip_fail = max(worst_chip_fail, chip_fail)
+        chips_with_fail += chip_fail > 0
+        v = r.first_votes
+        single_err += int((v != e.key_bits).sum())
+        maj_err += int(((v.sum(axis=1) > kp.n_votes // 2) != e.key_bits).sum())
+        n_bits += v.shape[0] * v.shape[2]
+    return {
+        "kcv_bits": kp.kcv_bits,
+        "reconstructions": n_tot,
+        "detected_failures": n_fail,
+        "silent_wrong_keys": n_silent,
+        "kcv_caught": n_caught,
+        "kcv_caught_recovered": n_recovered,
+        "needed_remeasure": n_retry,
+        "mean_attempts": attempts_sum / n_tot,
+        "worst_chip_failures": worst_chip_fail,
+        "chips_with_failures": int(chips_with_fail),
+        "key_reliability_single": 1 - single_err / (n_bits * kp.n_votes),
+        "key_reliability_majority": 1 - maj_err / n_bits,
+        "zero_event_bound": zero_bound(n_tot),
+    }
 
 
 def run_sigma(sigma, n_chips, n_recon, n_raw, seed):
@@ -91,44 +132,18 @@ def run_sigma(sigma, n_chips, n_recon, n_raw, seed):
         if ok:
             keys = np.array([enr[i].key_bits for i in ok])
             ids = {rp.device_id(rp.derive_key(k)) for k in keys}
-            n_tot = n_fail = n_silent = n_retry = 0
-            attempts_sum = 0
-            single_err = maj_err = n_bits = 0
-            worst_chip_fail = chips_with_fail = 0
-            for i in ok:
-                e = enr[i]
-                rng = np.random.default_rng(streams[i][3 + ti])
-                temps = rng.uniform(*TEMP_RANGE_C, n_recon)
-                r = rp.reconstruct(chips[i], e.helper, temps, kp, rng)
-                wrong = (r.key_bits != e.key_bits).any(axis=1)
-                n_tot += n_recon
-                n_fail += int(r.failed.sum())
-                n_silent += int((wrong & ~r.failed).sum())
-                n_retry += int((r.attempts > 1).sum())
-                attempts_sum += int(r.attempts.sum())
-                chip_fail = int((r.failed | wrong).sum())
-                worst_chip_fail = max(worst_chip_fail, chip_fail)
-                chips_with_fail += chip_fail > 0
-                v = r.first_votes
-                single_err += int((v != e.key_bits).sum())
-                maj_err += int(((v.sum(axis=1) > kp.n_votes // 2) != e.key_bits).sum())
-                n_bits += v.shape[0] * v.shape[2]
             hd = pairwise_hd(keys) if len(ok) > 1 else np.array([np.nan])
             row.update({
                 "key_uniformity": float(keys.mean()),
                 "key_uniqueness": float(np.nanmean(hd)),
                 "distinct_ids": len(ids),
-                "reconstructions": n_tot,
-                "detected_failures": n_fail,
-                "silent_wrong_keys": n_silent,
-                "needed_remeasure": n_retry,
-                "mean_attempts": attempts_sum / n_tot,
-                "worst_chip_failures": worst_chip_fail,
-                "chips_with_failures": int(chips_with_fail),
-                "key_reliability_single": 1 - single_err / (n_bits * kp.n_votes),
-                "key_reliability_majority": 1 - maj_err / n_bits,
-                "zero_event_bound": zero_bound(n_tot),
             })
+            # Same measurement streams for both variants: a paired comparison.
+            seeds = {i: streams[i][3 + ti] for i in ok}
+            row.update(run_reconstructions(chips, mean_delta, ok, seeds, kp, n_recon))
+            no_kcv = replace(kp, kcv_bits=0)
+            row["without_kcv"] = run_reconstructions(chips, mean_delta, ok, seeds,
+                                                     no_kcv, n_recon)
         per_tau.append(row)
 
     hist = {"inter": inter.tolist(),
@@ -175,7 +190,8 @@ def write_tables(results, out):
         "",
         "## Key generation per τ (model)",
         "",
-        "Reconstructions at T ~ U(−40, 85) °C, enrollment at 25 °C.",
+        "Reconstructions at T ~ U(−40, 85) °C, enrollment at 25 °C, with the",
+        "32-bit key-check value (KCV) in the helper data.",
         "",
         "| σ_process | τ (counts) | pairs passing mean [min–max] | chips failing enrollment | "
         "key BER 1 meas | key BER maj-3 | detected failure rate | "
@@ -203,6 +219,31 @@ def write_tables(results, out):
                 f"{t['worst_chip_failures']}/{n // t['enrolled_chips']} | "
                 f"{t['key_uniqueness']:.2%} | "
                 f"{t['distinct_ids']}/{t['enrolled_chips']} |")
+    lines += [
+        "",
+        "## Effect of the key-check value (model)",
+        "",
+        "Same chips, enrollment and measurement noise streams with and without",
+        "the KCV (paired). \"Caught\" = reconstructions where the KCV rejected a",
+        "SECDED miscorrection at least once; \"recovered\" = of those, ended with",
+        "the right key after re-measurement.",
+        "",
+        "| σ_process | τ (counts) | without KCV: detected | without KCV: silent wrong key | "
+        "with KCV: detected | with KCV: silent wrong key | KCV caught | caught & recovered |",
+        "|---|---|---|---|---|---|---|---|",
+    ]
+    for r in results:
+        for t in r["per_tau"]:
+            if not t["enrolled_chips"]:
+                continue
+            o, n = t["without_kcv"], t["reconstructions"]
+            lines.append(
+                f"| {r['sigma_process']:.1%} | {t['tau']} | "
+                f"{fmt_rate(o['detected_failures'], n)} | "
+                f"{fmt_rate(o['silent_wrong_keys'], n)} | "
+                f"{fmt_rate(t['detected_failures'], n)} | "
+                f"{fmt_rate(t['silent_wrong_keys'], n)} | "
+                f"{t['kcv_caught']} | {t['kcv_caught_recovered']} |")
     (out / "results.md").write_text("\n".join(lines) + "\n")
 
 
