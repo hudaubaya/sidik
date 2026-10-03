@@ -1,5 +1,7 @@
 # SIDIK
 
+[![test](https://github.com/hudaubaya/SIDIK/actions/workflows/test.yml/badge.svg)](https://github.com/hudaubaya/SIDIK/actions/workflows/test.yml)
+
 Hardware security building blocks for Tiny Tapeout / FPGA: a SHA-256 core
 (Shaman), compared against RO-PUF and ECC baselines.
 
@@ -17,7 +19,9 @@ Hardware security building blocks for Tiny Tapeout / FPGA: a SHA-256 core
 
 ## Running the tests
 
-Needs Python 3 (tested on 3.11) and Icarus Verilog (tested on 12.0).
+Needs Python 3 (tested on 3.11) and Icarus Verilog (tested on 12.0). CI
+(`.github/workflows/test.yml`) runs `make test` on every push to `main` and
+every pull request.
 
 ```sh
 sudo apt install iverilog
