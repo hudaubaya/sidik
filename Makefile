@@ -4,6 +4,7 @@
 # SIDIK top-level Makefile.
 #   make install   install Python deps (cocotb, numpy, matplotlib)
 #   make test      run every test (model unit tests + RTL cocotb tests)
+#   make puf-model rerun the RO-PUF Monte Carlo (docs/puf-model/)
 #   make clean     remove simulation outputs
 
 PYTHON ?= python3
@@ -11,7 +12,7 @@ SIM    ?= icarus
 
 RTL_TESTS := shaman
 
-.PHONY: all install test test-model test-rtl $(addprefix test-,$(RTL_TESTS)) check-tools clean
+.PHONY: all install test test-model test-rtl $(addprefix test-,$(RTL_TESTS)) check-tools puf-model clean
 
 all: test
 
@@ -28,6 +29,9 @@ test-rtl: $(addprefix test-,$(RTL_TESTS))
 $(addprefix test-,$(RTL_TESTS)): test-%: check-tools
 	$(MAKE) -C tb/$* SIM=$(SIM)
 	@! grep -q '<failure' tb/$*/results.xml || { echo "FAIL: tb/$*"; exit 1; }
+
+puf-model:
+	$(PYTHON) model/puf_montecarlo.py --out docs/puf-model
 
 check-tools:
 	@command -v iverilog >/dev/null || { echo "iverilog not found (apt install iverilog)"; exit 1; }
