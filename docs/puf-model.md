@@ -18,10 +18,10 @@ reconstruction, key/ID/HMAC), [`model/secded.py`](../model/secded.py)
 | Jitter | Each measurement multiplies every RO frequency by (1 + σ_jitter n), n ~ N(0,1), fresh per measurement. |
 | Pairs | Disjoint: (2i, 2i+1), i = 0..511. |
 | Measurement | Both counters start at a random phase and race; when the first reaches 2^14 the other is sampled. Δ = count(2i) − count(2i+1) (never 0); bit = Δ > 0. |
-| Enrollment (25 °C) | Δ̄ = mean of 16 measurements; mask \|Δ̄\| ≥ τ; first 216 passing pairs; 3 blocks × 72 bits; helper data = selected pairs + 3 × 8-bit Hsiao (72,64) syndromes + 32-bit key-check value (KCV). Fewer than 216 passing pairs = enrollment failure. |
+| Enrollment (25 °C by default) | Δ̄ = mean of 16 measurements per enrollment temperature; mask: same sign of Δ̄ at every enrollment temperature and \|Δ̄\| ≥ τ at each; also run at 25 + 85 °C and −40 + 85 °C (`KeyGenParams.enroll_temps_c`); first 216 passing pairs; 3 blocks × 72 bits; helper data = selected pairs + 3 × 8-bit Hsiao (72,64) syndromes + 32-bit key-check value (KCV). Fewer than 216 passing pairs = enrollment failure. |
 | Reconstruction | 3 measurements per pair, majority vote; per block, correct 1 bit; on a detected uncorrectable error re-measure that block. When all blocks decode but the KCV of the candidate key does not match (a SECDED miscorrection), re-measure all 3 blocks. At most 3 re-measurement rounds (4 attempts); a block still uncorrectable or a KCV still wrong = detected failure. |
 | Key, ID, auth | K = SHA-256(216 bits, MSB first ‖ "SIDIK-K"); KCV = first 32 bits of HMAC-SHA256(K, "SIDIK-CHK"); ID = HMAC-SHA256(K, "SIDIK-ID"); tag = HMAC-SHA256(K, challenge). |
-| Monte Carlo | 100 chips × 1000 reconstructions per (σ_process, τ); reconstruction temperature T ~ U(−40, 85) °C; σ_process ∈ {0.5, 1, 2} %, τ ∈ {0, 16, 32, 64, 128} counts. |
+| Monte Carlo | 100 chips × 1000 reconstructions per (σ_process, τ, variant); reconstruction temperature T ~ U(−40, 85) °C; σ_process ∈ {0.5, 1, 2} %, τ ∈ {0, 16, 32, 64, 128} counts. Variants: 25 °C enrollment with and without KCV; 25 + 85 °C and −40 + 85 °C enrollment with KCV. All variants share chips and reconstruction noise streams. |
 
 ### Parameters (all assumptions)
 
@@ -53,6 +53,9 @@ The spec left these open; each is a parameter in `KeyGenParams` / the code:
 - Helper data stores only the 216 selected pairs, not the full 512-pair mask.
 - KCV length 32 bits (`KeyGenParams.kcv_bits`; 0 disables it). A wrong key
   passes the check with probability 2⁻³².
+- Two-temperature enrollment: the key bit is the sign at the first
+  enrollment temperature; a pair whose sign differs between the enrollment
+  temperatures is dropped regardless of τ.
 
 ## Results (model)
 
@@ -83,6 +86,28 @@ chips got distinct IDs in every configuration that enrolled.
 ![Raw reliability vs temperature (model)](puf-model/reliability_vs_temp.png)
 ![Inter- vs intra-chip distance (model)](puf-model/hd_hist.png)
 
+### Enrollment at two temperatures (model)
+
+KCV on; failure = detected + silent (silent was 0 everywhere). Same chips and
+reconstruction noise for all three enrollment variants.
+
+| σ_process | τ | enrolled at | pairs passing (min) | chips failing enrollment | failure rate | chips with ≥1 failure |
+|---|---|---|---|---|---|---|
+| 1 % | 0 | 25 °C | 512 | 0/100 | 6.6·10⁻¹ | 100/100 |
+| 1 % | 0 | 25 + 85 °C | 471 | 0/100 | 3.5·10⁻¹ | 100/100 |
+| 1 % | 0 | −40 + 85 °C | 443 | 0/100 | 9.0·10⁻⁵ | 5/100 |
+| 1 % | 32 | 25 °C | 437 | 0/100 | 9.0·10⁻² | 88/100 |
+| 1 % | 32 | 25 + 85 °C | 416 | 0/100 | 4.3·10⁻² | 65/100 |
+| 1 % | 32 | −40 + 85 °C | 390 | 0/100 | < 3·10⁻⁵ | 0/100 |
+| 1 % | 64 | 25 °C | 385 | 0/100 | 3.2·10⁻⁴ | 7/100 |
+| 1 % | 64 | 25 + 85 °C | 360 | 0/100 | 1.1·10⁻⁴ | 4/100 |
+| 1 % | 64 | −40 + 85 °C | 331 | 0/100 | < 3·10⁻⁵ | 0/100 |
+| 0.5 % | 16 | −40 + 85 °C | 341 | 0/100 | < 3·10⁻⁵ | 0/100 |
+| 0.5 % | 64 | −40 + 85 °C | 193 | 27/100 | < 4·10⁻⁵ (73 chips) | 0/73 |
+| 2 % | 0 | −40 + 85 °C | 476 | 0/100 | < 3·10⁻⁵ | 0/100 |
+
+![Enrollment at one vs two temperatures (model)](puf-model/enroll_modes.png)
+
 ## Findings (model)
 
 1. **Only the mask removes temperature errors. Majority voting and
@@ -107,8 +132,7 @@ chips got distinct IDs in every configuration that enrolled.
 3. **Failures are a per-chip property.** At σ 1 %, τ 64 all 34 failures come
    from 7 of 100 chips, and the worst chip fails 10 of 1000 reconstructions.
    An average failure rate hides chips that will fail in the field.
-   Enrollment-time screening (e.g. enrolling at two temperatures and dropping
-   pairs that flip) addresses this better than a larger τ.
+   Enrollment-time screening addresses this better than a larger τ (finding 8).
 4. **τ is bounded by σ_Δ because there are only 512 disjoint pairs.** At least
    216 of 512 (42 %) must pass. For Gaussian Δ that means τ ≲ 0.80·σ_Δ.
    σ_Δ ≈ 116 / 229 / 454 counts for σ_process 0.5 / 1 / 2 %, so τ = 128 works
@@ -131,10 +155,30 @@ chips got distinct IDs in every configuration that enrolled.
    ≤ 192 bits of entropy. In practice the KCV only lets an attacker confirm a
    guess offline, which does not help against ≥ 160 unknown bits.
 
+8. **Enrolling at both temperature corners removes the temperature
+   failures in the model; enrolling at 25 + 85 °C only halves them.** With
+   −40 + 85 °C enrollment no reconstruction failed at any τ ≥ 16, for every
+   σ_process that enrolled (< 3·10⁻⁵ each). At σ 1 %, τ = 0 the rate drops
+   from 0.66 to 9·10⁻⁵. Once temperature flips are gone, jitter is the main
+   error source, and there majority-of-3 does help: key BER 1.8·10⁻³ →
+   9.3·10⁻⁴ at σ 1 %, τ 0. 25 + 85 °C enrollment leaves every pair that
+   crosses on the cold side, so failures only fall by about half
+   (σ 1 %, τ 32: 9.0 % → 4.3 %). The costs:
+   - **Fewer pairs.** At σ 0.5 %, τ 64, 27 of 100 chips fail enrollment at
+     −40 + 85 °C. With corner enrollment a smaller τ (16–32) is enough.
+   - **This result is optimistic by construction.** In the model Δ is linear
+     in T, so the same sign at −40 and 85 °C guarantees the same sign at every
+     temperature in between. Real ROs have non-linear tempco, supply-voltage
+     dependence and ageing, none of which is modelled. Measure on hardware
+     before relying on it.
+   - **Production cost.** Every chip has to be enrolled at −40 °C and 85 °C,
+     which needs a temperature chamber (or a controlled hot/cold chuck) in the
+     provisioning flow.
+
 ## Reproduce
 
 ```sh
-make puf-model    # ~80 s on 3 cores; rewrites docs/puf-model/
+make puf-model    # ~2.5 min on 3 cores; rewrites docs/puf-model/
 make test-model   # unit tests, including SECDED and key-generation checks
 ```
 

@@ -45,9 +45,10 @@ class KeyGenTest(unittest.TestCase):
         self.assertTrue(e.ok)
         self.assertEqual(e.helper.pairs.size, 216)
         self.assertEqual(e.helper.syndromes.shape, (3,))
-        self.assertTrue(np.all(np.abs(e.mean_delta[e.helper.pairs]) >= self.kp.tau))
+        self.assertEqual(e.mean_delta.shape, (1, 512))
+        self.assertTrue(np.all(np.abs(e.mean_delta[0, e.helper.pairs]) >= self.kp.tau))
         # first 216 passing pairs, in index order
-        passing = np.flatnonzero(np.abs(e.mean_delta) >= self.kp.tau)
+        passing = np.flatnonzero(np.abs(e.mean_delta[0]) >= self.kp.tau)
         np.testing.assert_array_equal(e.helper.pairs, passing[:216])
 
     def test_enrollment_fails_without_enough_pairs(self):
@@ -88,6 +89,42 @@ class KeyGenTest(unittest.TestCase):
         r = rp.reconstruct(self.chip, e.helper, temps, self.kp, self.rng)
         self.assertFalse(r.failed.any())
         self.assertTrue((r.key_bits == e.key_bits).all())
+
+
+class DualTemperatureEnrollmentTest(unittest.TestCase):
+    def setUp(self):
+        self.rng = np.random.default_rng(11)
+        self.dual = rp.KeyGenParams(enroll_temps_c=(-40.0, 85.0))
+
+    def test_pair_crossing_in_range_is_excluded(self):
+        p = rp.PufParams(sigma_jitter=0.0)
+        chip = rp.Chip(p, self.rng)
+        # Pair 0: RO 0 faster by 1 % at 25 C, but its tempco makes it slower
+        # by 1 % at 85 C (crossing near 55 C).
+        chip.f_nom[[0, 1]] = [p.f0_hz * 1.01, p.f0_hz]
+        chip.tempco[[0, 1]] = [p.tempco - 3.3e-4, p.tempco]
+        single = rp.enroll(chip, rp.KeyGenParams(), self.rng)
+        dual = rp.enroll(chip, self.dual, self.rng)
+        self.assertEqual(dual.mean_delta.shape, (2, 512))
+        self.assertIn(0, single.helper.pairs)
+        self.assertNotIn(0, dual.helper.pairs)
+
+    def test_single_temperature_matches_default(self):
+        chip = rp.Chip(rp.PufParams(), self.rng)
+        md = rp.measure_enrollment(chip, rp.KeyGenParams(), self.rng)
+        a = rp.enroll_from_mean(md, rp.KeyGenParams())
+        b = rp.enroll_from_mean(md[0], rp.KeyGenParams())
+        np.testing.assert_array_equal(a.helper.pairs, b.helper.pairs)
+
+    def test_jitter_free_dual_corner_enrollment_has_no_temperature_errors(self):
+        # Linear tempco: same sign at -40 and 85 C implies the same sign at
+        # every temperature in between.
+        chip = rp.Chip(rp.PufParams(sigma_jitter=0.0), self.rng)
+        e = rp.enroll(chip, self.dual, self.rng)
+        temps = self.rng.uniform(-40, 85, 300)
+        r = rp.reconstruct(chip, e.helper, temps, self.dual, self.rng)
+        self.assertFalse(r.failed.any())
+        self.assertTrue((r.first_votes == e.key_bits).all())
 
 
 def _miscorrecting_triple():

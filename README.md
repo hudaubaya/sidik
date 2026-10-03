@@ -28,7 +28,7 @@ sudo apt install iverilog
 make install      # pip install -r requirements.txt
 make test         # model unit tests + every RTL testbench
 make test-shaman  # one testbench
-make puf-model    # rerun the RO-PUF Monte Carlo (~80 s), rewrites docs/puf-model/
+make puf-model    # rerun the RO-PUF Monte Carlo (~2.5 min), rewrites docs/puf-model/
 make clean
 ```
 
