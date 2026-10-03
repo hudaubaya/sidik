@@ -18,7 +18,7 @@ Every race is converted to x = ln(f_a / f_b), which the counts give
 directly: x = -ln(1 - delta'/N) when RO 2i wins, ln(1 + delta'/N) otherwise
 (N = counter threshold, delta' = delta - b sign(delta) removes the
 measurement's bias b on |delta|: +0.5 counts for the model's race(), about
--1.5 for rtl/ropuf; set it as delta_magnitude_bias in meta.json). In x the model is
+-3.0 for rtl/ropuf; set it as delta_magnitude_bias in meta.json). In x the model is
 
   x(T) = x0 + s * u(T),  u(T) = (T - T_ref) / (1 + k0 (T - T_ref))
 

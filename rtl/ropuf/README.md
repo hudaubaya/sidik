@@ -17,14 +17,15 @@ register interface.
 
 | File | Contents |
 |---|---|
-| `ro_cell.v` | One RO: NAND enable + (N_STAGES−1) inverters, each a preserved `ro_stage` instance. Behavioural oscillator under `SIM`. |
-| `race_counter.v` | Counter clocked by one RO; stops at 2^LOG2N or when the other counter's `done` arrives through a 2-flop synchronizer. |
-| `ropuf_core.v` | 1024 ROs, pair selection, the two counters, control FSM. |
+| `../ro_cell.v` | One RO: NAND enable + (N_STAGES−1) inverters. Generic path: each stage a preserved `ro_stage` instance. `CYCLONEV`: LUT + `lcell` primitive per stage. `SIM`: behavioural oscillator, half-period from `HALF_PERIOD_NS` or from `+RO_SEED`. |
+| `../ro_array.v` | 1024 ROs in pairs; only the selected pair is enabled. |
+| `../puf_meas.v` | Two racing counters behind a ripple prescaler, control FSM, sign and magnitude of Δ in the 50 MHz domain. |
+| `ropuf_core.v` | Latches the pair; `ro_array` + `puf_meas`. |
 | `ropuf_avmm.v` | Avalon-MM slave (register map below). |
 | `synth_check.py` | yosys generic synthesis; fails if any RO lost a stage. |
 
 Parameters: `N_RO` (1024, even), `N_STAGES` (5, odd), `LOG2N` (14),
-`TIMEOUT_RESET` (2^20 clk cycles).
+`PRESCALE_LOG2` (1), `TIMEOUT_RESET` (2^20 clk cycles).
 
 ## How a measurement works
 
@@ -32,10 +33,12 @@ Parameters: `N_RO` (1024, even), `N_STAGES` (5, odd), `LOG2N` (14),
 2. **ARM:** reset released while the ROs are still off (no clock edges, so
    no recovery or removal hazard).
 3. **RUN:** only ROs 2·pair and 2·pair+1 are enabled. The other 1022 stay
-   off, which reduces power and coupling. Each counter is clocked by its own
-   RO. The faster one stops at exactly 2^14. Its `done` reaches the slower
-   counter through two flops in the slower RO's clock domain, and the slower
-   counter then stops.
+   off, which reduces power and coupling. Each RO clocks only a ripple
+   prescaler (one toggle flip-flop per stage, `PRESCALE_LOG2` = 1). The
+   counter runs at f_RO/2, so it needs half the fmax of a counter clocked by
+   the RO directly. The faster counter stops at exactly 2^14 RO cycles. Its
+   `done` reaches the slower counter through two flops in the slower
+   counter's divided clock domain, and the slower counter then stops.
 4. **STOP:** once both `halted` flags are seen in `clk` after 2-flop
    synchronizers, the ROs are switched off and the counts are captured.
    The counts no longer change once halted, so the multi-bit capture is
@@ -43,14 +46,22 @@ Parameters: `N_RO` (1024, even), `N_STAGES` (5, odd), `LOG2N` (14),
 5. If RUN exceeds `TIMEOUT` clk cycles, the measurement ends with TIMEOUT
    set. The captured counts are then diagnostic only.
 
-`DELTA = COUNT_A − COUNT_B`: positive when RO 2·pair is faster.
+`DELTA = COUNT_A − COUNT_B` in RO cycles: positive when RO 2·pair is
+faster. Counts are multiples of 2 (the prescaler), so Δ has a resolution of
+2 RO cycles. The added quantisation noise (≈ 0.7 counts²) is small next to
+the jitter noise the model assumes (≈ 48 counts²).
 
-**Measurement bias.** The synchronizer lets the slower counter run 2 more
-of its own cycles after the winner reaches 2^14. With both ROs starting
-together, |DELTA| is on average **1.5 counts smaller** than
-2^14·|1 − f_slow/f_fast| (−2.0 to −1.0 over the 512 simulated pairs).
-`fpga/char/analyze.py` corrects for this when the run's `meta.json` sets
-`delta_magnitude_bias` to −1.5.
+**Dead zone.** The slower counter runs 2 more divided cycles (4 RO cycles)
+after the winner reaches 2^14. When the ideal |Δ| = 2^14·|1 − f_slow/f_fast|
+is at most 4 counts, both counters therefore reach 2^14 and the pair reads
+as Δ = 0 (bit 0). Outside that zone the sign is always right (checked on
+200,000 random period pairs with `tb/common/ro_sim.py`). Any mask threshold
+τ ≥ 16 counts drops these pairs anyway.
+
+**Measurement bias.** For the same reason |DELTA| is on average **3.0
+counts smaller** than the ideal |Δ| (−4.1 to −2.0). `fpga/char/analyze.py`
+corrects for this when the run's `meta.json` sets `delta_magnitude_bias`
+to −3.0.
 
 **Duration.** About 2^14 / f_RO + a few clk cycles, i.e. ~65 µs at
 250 MHz. A full 512-pair response takes ~34 ms plus bus overhead.
@@ -77,22 +88,35 @@ check DONE = 1 and TIMEOUT = 0, then read DELTA.
 
 ## Verification
 
-- `make test-ropuf` (cocotb, Icarus, `-DSIM`). It reads ID and PARAMS. For
-  pairs 0, 1, 2, 100, 255 and 511 it checks that COUNT_A and COUNT_B equal,
-  exactly, the values predicted from the behavioural RO periods, including
-  the 2-cycle synchronizer overrun. It also checks repeatability, that START
-  is ignored while busy, and the timeout path.
+- `make test-puf_meas` (cocotb, `-DSIM`, RO periods random per `RO_SEED`)
+  tests `ro_array` + `puf_meas` directly. For 24 random pairs in random
+  order the counts must equal, exactly, the values predicted from the RO
+  periods. The sign must match the faster RO, except inside the dead zone
+  where Δ = 0 is required. |Δ| must be within 4 steps of the ideal. A
+  monitor checks on every clk edge that only the selected pair is enabled
+  and that no other RO output is high. It also checks ascending and
+  descending pair sweeps, the `HALF_PERIOD_NS` parameter path and the
+  timeout. The monitor and the pair-order test were checked against two
+  mutated copies of `ro_array.v` (an extra pair enabled; A/B swapped); both
+  were caught.
+- `make test-ropuf` exercises the same core through the Avalon-MM
+  registers: ID/PARAMS, exact counts for six pairs, repeatability, START
+  while busy, and timeout.
 - `make synth-check` (yosys generic synthesis): all 1024 NAND and 4096
   inverter stages survive. That check exists because the first version kept
   only `keep` attributes on the nets, and yosys still reduced every RO to a
-  single inverter. Total ~10k generic cells.
+  single inverter. Total ~10k generic cells. It also compiles the
+  `CYCLONEV` path against a stand-in `lcell` (`tb/common/lcell_stub.v`).
+  That only checks syntax and connectivity; the real primitive's effect can
+  only be checked in Quartus.
 
 ## Before this runs on an FPGA
 
 None of these steps can be done or checked from this repository yet:
 
-- **Vendor synthesis.** Confirm in the fitter report that every RO keeps 5
-  LUTs: Quartus `synthesis keep`, and for Vivado `DONT_TOUCH` plus
+- **Vendor synthesis.** Build with `CYCLONEV` defined for Quartus and
+  confirm in the fitter report that every RO keeps 5 logic cells. For
+  Vivado, use the generic path with `DONT_TOUCH` plus
   `ALLOW_COMBINATORIAL_LOOPS` on the stage nets.
 - **Timing constraints.** Declare the RO outputs as clocks, or cut the paths
   between the RO domains and `clk`. Constrain the synchronizers (`ASYNC_REG`
@@ -100,10 +124,10 @@ None of these steps can be done or checked from this repository yet:
 - **Placement.** Place the two ROs of a pair in identical, adjacent
   locations (LogicLock / Pblock per pair). Otherwise routing differences,
   not process variation, decide the bits.
-- **RO frequency vs counter fmax.** The 15-bit counters must keep up with
-  the RO. If a 5-stage RO is faster than the counter can run on the target
-  device, increase `N_STAGES`. The achievable RO frequency is unknown until
-  measured.
+- **RO frequency vs flip-flop toggle rate.** Only the first prescaler
+  flip-flop runs at f_RO; the counter runs at f_RO/2^PRESCALE_LOG2. If timing
+  still fails, raise `PRESCALE_LOG2` (coarser Δ) or `N_STAGES` (slower RO).
+  The achievable RO frequency is unknown until measured.
 - **Integration.** Add the core to the Platform Designer system (e.g. HPS
   lightweight bridge on DE10-Nano) and implement `HardwareBackend` in
   `fpga/char/acquire.py`.

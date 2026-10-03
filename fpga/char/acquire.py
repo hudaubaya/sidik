@@ -56,7 +56,7 @@ class HardwareBackend(Backend):
 
     Implement set_condition() for the temperature chamber / supply and
     measure() with the register sequence in rtl/ropuf/README.md, and report
-    delta_magnitude_bias = -1.5 in meta(). Until then, any external tool can
+    delta_magnitude_bias = -3.0 in meta(). Until then, any external tool can
     write the deltas.csv / meta.json format directly.
     """
 
