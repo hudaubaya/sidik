@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 SIDIK contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 # SIDIK top-level Makefile.
 #   make install   install Python deps (cocotb, numpy, matplotlib)
 #   make test      run every test (model unit tests + RTL cocotb tests)

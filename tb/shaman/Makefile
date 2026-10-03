@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 SIDIK contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 # cocotb testbench for the Shaman SHA-256 core.
 # Run from the repo root with `make test-shaman`, or here with `make`.
 

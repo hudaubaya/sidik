@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 SIDIK contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """SHA-256 reference model for the SIDIK testbenches.
 
 The Shaman core hashes pre-padded 512-bit blocks, so the host side (testbench,

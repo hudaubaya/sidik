@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 SIDIK contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 `default_nettype none
 `timescale 1ns/1ps
 
