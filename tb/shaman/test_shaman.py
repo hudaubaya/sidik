@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2026 SIDIK contributors
+# SPDX-FileCopyrightText: 2026 Universitas Sriwijaya
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 """cocotb tests for the Shaman SHA-256 core against model/sha256_ref.py."""

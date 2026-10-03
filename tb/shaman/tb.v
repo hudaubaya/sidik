@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2026 SIDIK contributors
+// SPDX-FileCopyrightText: 2026 Universitas Sriwijaya
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 `default_nettype none
