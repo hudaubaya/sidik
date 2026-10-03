@@ -17,7 +17,9 @@ import tempfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-SOURCES = ["ro_cell.v", "race_counter.v", "ropuf_core.v", "ropuf_avmm.v"]
+RTL = HERE.parent
+SOURCES = [str(RTL / f) for f in ("ro_cell.v", "ro_array.v", "puf_meas.v",
+                                  "ropuf/ropuf_core.v", "ropuf/ropuf_avmm.v")]
 N_RO = 1024
 N_STAGES = 5
 

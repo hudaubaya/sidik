@@ -3,50 +3,31 @@
 
 """cocotb tests for rtl/ropuf through its Avalon-MM registers.
 
-The ROs are the behavioural model in ro_cell.v (-DSIM): fixed, jitter-free
-frequencies given by half_fs() below, so every count is predictable.
+The ROs are the behavioural model in rtl/ro_cell.v (-DSIM): jitter-free
+periods from +RO_SEED (tb/common/ro_sim.py), so every count is predictable.
 """
 
 import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import ClockCycles, RisingEdge, ReadOnly
 
+import ro_sim
+
 ID, PARAMS, CTRL, PAIR, COUNT_A, COUNT_B, DELTA, TIMEOUT = range(8)
 N_PAIRS = 512
 LOG2N = 14
+PRESCALE_LOG2 = 1
 N = 1 << LOG2N
-SYNC_STAGES = 2  # loser's stop synchronizer in race_counter.v
 
 
 def half_fs(idx):
-    """Mirror of half_ns() in rtl/ropuf/ro_cell.v, in integer femtoseconds.
-
-    2.0 ns * (1 + 1e-5 * (h - 2000)) = 2_000_000 fs + 20 fs * (h - 2000).
-    """
-    p = (idx * 2654435761) & 0xFFFFFFFFFFFFFFFF
-    h = ((p & 0xFFFFFFFF) >> 8) % 4001
-    return 2_000_000 + 20 * (h - 2000)
+    return ro_sim.half_fs(int(cocotb.plusargs.get("RO_SEED", 1)), idx)
 
 
 def expected(pair):
-    """(count_a, count_b) for the jitter-free behavioural ROs.
-
-    Both ROs start together; RO k has its first rising edge at half_k and
-    then one every 2*half_k. The winner stops at N; the loser counts its
-    edges up to the winner's N-th edge plus SYNC_STAGES more.
-    """
-    ha, hb = half_fs(2 * pair), half_fs(2 * pair + 1)
-    if ha == hb:
-        return N, N
-
-    def edges_by(t, h):
-        return (t - h) // (2 * h) + 1
-
-    if ha < hb:
-        t = ha + (N - 1) * 2 * ha
-        return N, min(edges_by(t, hb) + SYNC_STAGES, N)
-    t = hb + (N - 1) * 2 * hb
-    return min(edges_by(t, ha) + SYNC_STAGES, N), N
+    """(count_a, count_b) predicted for the behavioural ROs."""
+    return ro_sim.expected_counts(half_fs(2 * pair), half_fs(2 * pair + 1),
+                                  LOG2N, PRESCALE_LOG2)
 
 
 async def setup(dut):
@@ -122,7 +103,8 @@ async def test_pairs_match_behavioural_model(dut):
         assert max(ca, cb) == N
         assert delta == ca - cb
         assert (ca, cb) == (ea, eb)
-        assert (delta > 0) == (half_fs(2 * pair) < half_fs(2 * pair + 1))
+        if ea != eb:  # ties (dead zone) read as delta = 0, see puf_meas.v
+            assert (delta > 0) == (half_fs(2 * pair) < half_fs(2 * pair + 1))
 
 
 @cocotb.test()

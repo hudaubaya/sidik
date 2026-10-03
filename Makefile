@@ -4,7 +4,8 @@
 # SIDIK top-level Makefile.
 #   make install   install Python deps (cocotb, numpy, matplotlib)
 #   make test      run every test (model, characterization and RTL tests)
-#   make synth-check  generic yosys synthesis of rtl/ropuf and rtl/secded72.v
+#   make synth-check  yosys synthesis of the RO-PUF and secded72; compile-check
+#                     the CYCLONEV path of rtl/ro_cell.v
 #   make test-mutants mutation check of the secded72 testbench
 #   make puf-model rerun the RO-PUF Monte Carlo (docs/puf-model/)
 #   make clean     remove simulation outputs
@@ -12,7 +13,7 @@
 PYTHON ?= python3
 SIM    ?= icarus
 
-RTL_TESTS := shaman ropuf secded72
+RTL_TESTS := shaman ropuf puf_meas secded72
 
 .PHONY: all install test test-model test-char test-rtl $(addprefix test-,$(RTL_TESTS)) check-tools test-mutants synth-check puf-model clean
 
@@ -41,6 +42,8 @@ test-mutants: check-tools
 synth-check:
 	@command -v yosys >/dev/null || { echo "yosys not found (apt install yosys)"; exit 1; }
 	$(PYTHON) rtl/ropuf/synth_check.py
+	iverilog -g2012 -DCYCLONEV -o /dev/null -s ro_array tb/common/lcell_stub.v rtl/ro_cell.v rtl/ro_array.v
+	@echo "OK, the CYCLONEV (lcell) path of rtl/ro_cell.v compiles"
 	yosys -q -p "read_verilog rtl/secded72.v; synth -top secded72; check -assert"
 	@echo "OK, rtl/secded72.v synthesizes cleanly"
 
