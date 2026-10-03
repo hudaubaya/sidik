@@ -23,8 +23,8 @@ Measurement
 Enrollment (at each temperature in enroll_temps_c, default T_ref only)
     mean of 16 deltas per pair per temperature; a pair passes when its sign
     is the same at every enrollment temperature and |mean| >= tau at each
-    of them; take the first 216 passing pairs; split into 3 blocks of 72 bits; publish the Hsiao
-    (72,64) syndrome of each block. Helper data = mask of the 216 pairs
+    of them; take the first 216 passing pairs; split into 3 blocks of 72 bits; publish the extended
+    Hamming (72,64) syndrome of each block (secded.py, = rtl/secded72.v). Helper data = mask of the 216 pairs
     + 3 x 8-bit syndromes + 32-bit key-check value.
 
 Reconstruction

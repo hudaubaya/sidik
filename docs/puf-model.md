@@ -8,7 +8,8 @@
 
 Code: [`model/ro_puf.py`](../model/ro_puf.py) (chip, measurement, enrollment,
 reconstruction, key/ID/HMAC), [`model/secded.py`](../model/secded.py)
-(Hsiao (72,64) syndrome sketch), [`model/puf_montecarlo.py`](../model/puf_montecarlo.py)
+(extended Hamming (72,64) syndrome sketch, bit-exact with
+[`rtl/secded72.v`](../rtl/secded72.v)), [`model/puf_montecarlo.py`](../model/puf_montecarlo.py)
 (sweep). Full tables: [`puf-model/results.md`](puf-model/results.md); raw data:
 [`puf-model/results.json`](puf-model/results.json).
 
@@ -20,7 +21,7 @@ reconstruction, key/ID/HMAC), [`model/secded.py`](../model/secded.py)
 | Jitter | Each measurement multiplies every RO frequency by (1 + σ_jitter n), n ~ N(0,1), fresh per measurement. |
 | Pairs | Disjoint: (2i, 2i+1), i = 0..511. |
 | Measurement | Both counters start at a random phase and race; when the first reaches 2^14 the other is sampled. Δ = count(2i) − count(2i+1) (never 0); bit = Δ > 0. |
-| Enrollment (25 °C by default) | Δ̄ = mean of 16 measurements per enrollment temperature; mask: same sign of Δ̄ at every enrollment temperature and \|Δ̄\| ≥ τ at each; also run at 25 + 85 °C and −40 + 85 °C (`KeyGenParams.enroll_temps_c`); first 216 passing pairs; 3 blocks × 72 bits; helper data = selected pairs + 3 × 8-bit Hsiao (72,64) syndromes + 32-bit key-check value (KCV). Fewer than 216 passing pairs = enrollment failure. |
+| Enrollment (25 °C by default) | Δ̄ = mean of 16 measurements per enrollment temperature; mask: same sign of Δ̄ at every enrollment temperature and \|Δ̄\| ≥ τ at each; also run at 25 + 85 °C and −40 + 85 °C (`KeyGenParams.enroll_temps_c`); first 216 passing pairs; 3 blocks × 72 bits; helper data = selected pairs + 3 × 8-bit extended Hamming (72,64) syndromes + 32-bit key-check value (KCV). Fewer than 216 passing pairs = enrollment failure. |
 | Reconstruction | 3 measurements per pair, majority vote; per block, correct 1 bit; on a detected uncorrectable error re-measure that block. When all blocks decode but the KCV of the candidate key does not match (a SECDED miscorrection), re-measure all 3 blocks. At most 3 re-measurement rounds (4 attempts); a block still uncorrectable or a KCV still wrong = detected failure. |
 | Key, ID, auth | K = SHA-256(216 bits, MSB first ‖ "SIDIK-K"); KCV = first 32 bits of HMAC-SHA256(K, "SIDIK-CHK"); ID = HMAC-SHA256(K, "SIDIK-ID"); tag = HMAC-SHA256(K, challenge). |
 | Monte Carlo | 100 chips × 1000 reconstructions per (σ_process, τ, variant); reconstruction temperature T ~ U(−40, 85) °C; σ_process ∈ {0.5, 1, 2} %, τ ∈ {0, 16, 32, 64, 128} counts. Variants: 25 °C enrollment with and without KCV; 25 + 85 °C and −40 + 85 °C enrollment with KCV. All variants share chips and reconstruction noise streams. |
@@ -68,11 +69,11 @@ chips and the same noise streams, so the comparison is paired.
 
 | σ_process | τ | pairs passing (min) | key BER, 1 meas | key BER, maj-3 | no KCV: detected | no KCV: silent wrong key | KCV: detected | KCV: silent wrong key | chips with ≥1 failure (KCV) |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 % | 0 | 512 | 2.8·10⁻² | 2.7·10⁻² | 4.7·10⁻¹ | 2.0·10⁻¹ | 6.6·10⁻¹ | < 3·10⁻⁵ | 100/100 |
-| 1 % | 32 | 437 | 3.8·10⁻³ | 3.6·10⁻³ | 6.8·10⁻² | 2.4·10⁻² | 9.0·10⁻² | < 3·10⁻⁵ | 88/100 |
+| 1 % | 0 | 512 | 2.8·10⁻² | 2.7·10⁻² | 3.9·10⁻¹ | 2.9·10⁻¹ | 6.6·10⁻¹ | < 3·10⁻⁵ | 100/100 |
+| 1 % | 32 | 437 | 3.8·10⁻³ | 3.6·10⁻³ | 5.9·10⁻² | 3.5·10⁻² | 9.1·10⁻² | < 3·10⁻⁵ | 88/100 |
 | 1 % | 64 | 385 | 3.4·10⁻⁴ | 3.0·10⁻⁴ | 3.3·10⁻⁴ | 1.0·10⁻⁵ | 3.2·10⁻⁴ | < 3·10⁻⁵ | 7/100 |
 | 1 % | 128 | 276 | 6·10⁻⁸ | 0 (< 1.4·10⁻⁷) | < 3·10⁻⁵ | < 3·10⁻⁵ | < 3·10⁻⁵ | < 3·10⁻⁵ | 0/100 |
-| 0.5 % | 64 | 269 | 7.8·10⁻⁴ | 7.1·10⁻⁴ | 6.9·10⁻³ | 9.5·10⁻⁴ | 7.6·10⁻³ | < 3·10⁻⁵ | 27/100 |
+| 0.5 % | 64 | 269 | 7.8·10⁻⁴ | 7.1·10⁻⁴ | 6.4·10⁻³ | 1.5·10⁻³ | 7.7·10⁻³ | < 3·10⁻⁵ | 27/100 |
 | 0.5 % | 128 | 115 | – | – | all 100 chips fail enrollment | – | – | – | – |
 | 2 % | 64 | 435 | 1.5·10⁻⁴ | 1.3·10⁻⁴ | 6.2·10⁻⁴ | < 3·10⁻⁵ | 6.2·10⁻⁴ | < 3·10⁻⁵ | 2/100 |
 | 2 % | 128 | 366 | 5·10⁻⁷ | 5·10⁻⁷ | < 3·10⁻⁵ | < 3·10⁻⁵ | < 3·10⁻⁵ | < 3·10⁻⁵ | 0/100 |
@@ -97,8 +98,8 @@ reconstruction noise for all three enrollment variants.
 |---|---|---|---|---|---|---|
 | 1 % | 0 | 25 °C | 512 | 0/100 | 6.6·10⁻¹ | 100/100 |
 | 1 % | 0 | 25 + 85 °C | 471 | 0/100 | 3.5·10⁻¹ | 100/100 |
-| 1 % | 0 | −40 + 85 °C | 443 | 0/100 | 9.0·10⁻⁵ | 5/100 |
-| 1 % | 32 | 25 °C | 437 | 0/100 | 9.0·10⁻² | 88/100 |
+| 1 % | 0 | −40 + 85 °C | 443 | 0/100 | 8.0·10⁻⁵ | 6/100 |
+| 1 % | 32 | 25 °C | 437 | 0/100 | 9.1·10⁻² | 88/100 |
 | 1 % | 32 | 25 + 85 °C | 416 | 0/100 | 4.3·10⁻² | 65/100 |
 | 1 % | 32 | −40 + 85 °C | 390 | 0/100 | < 3·10⁻⁵ | 0/100 |
 | 1 % | 64 | 25 °C | 385 | 0/100 | 3.2·10⁻⁴ | 7/100 |
@@ -106,7 +107,7 @@ reconstruction noise for all three enrollment variants.
 | 1 % | 64 | −40 + 85 °C | 331 | 0/100 | < 3·10⁻⁵ | 0/100 |
 | 0.5 % | 16 | −40 + 85 °C | 341 | 0/100 | < 3·10⁻⁵ | 0/100 |
 | 0.5 % | 64 | −40 + 85 °C | 193 | 27/100 | < 4·10⁻⁵ (73 chips) | 0/73 |
-| 2 % | 0 | −40 + 85 °C | 476 | 0/100 | < 3·10⁻⁵ | 0/100 |
+| 2 % | 0 | −40 + 85 °C | 476 | 0/100 | 1.0·10⁻⁵ | 1/100 |
 
 ![Enrollment at one vs two temperatures (model)](puf-model/enroll_modes.png)
 
@@ -123,14 +124,20 @@ reconstruction noise for all three enrollment variants.
    makes every such miscorrection detected, but does not prevent the
    failures.** Three or more errors in a block can alias to a single-bit
    syndrome and be "corrected" into a different word. Without the KCV, silent
-   wrong keys are 3–58 % as frequent as detected failures (e.g. 2.4 % vs
-   6.8 % at σ 1 %, τ 32). With the KCV, no silent wrong key occurred in any
+   wrong keys are 3–88 % as frequent as detected failures (e.g. 3.5 % vs
+   5.9 % at σ 1 %, τ 32). With the KCV, no silent wrong key occurred in any
    configuration (< 3·10⁻⁵ each). Those cases now count as detected failures,
-   so the detected rate goes up (6.8 % → 9.0 % at σ 1 %, τ 32). Re-measuring
-   after a KCV mismatch recovers only 5–19 % of them (where more than a
+   so the detected rate goes up (5.9 % → 9.1 % at σ 1 %, τ 32). Re-measuring
+   after a KCV mismatch recovers only 5–12 % of them (where more than a
    handful were caught), because the
    temperature, and with it the error pattern, stays the same (finding 1).
    The KCV makes failures visible. It does not make them less frequent.
+   **The choice of SECDED code matters only without the KCV.** These results
+   use the extended Hamming code of `rtl/secded72.v`. An earlier version of
+   this study used a Hsiao (72,64) code: without the KCV, extended Hamming
+   gives 20–58 % more silent wrong keys than Hsiao in the same runs
+   (σ 1 %, τ 32: 2.4 % → 3.5 %). With the KCV the failure rates of the two
+   codes differ by less than 1 % and neither gives a silent wrong key.
 3. **Failures are a per-chip property.** At σ 1 %, τ 64 all 34 failures come
    from 7 of 100 chips, and the worst chip fails 10 of 1000 reconstructions.
    An average failure rate hides chips that will fail in the field.
@@ -161,11 +168,11 @@ reconstruction noise for all three enrollment variants.
    failures in the model; enrolling at 25 + 85 °C only halves them.** With
    −40 + 85 °C enrollment no reconstruction failed at any τ ≥ 16, for every
    σ_process that enrolled (< 3·10⁻⁵ each). At σ 1 %, τ = 0 the rate drops
-   from 0.66 to 9·10⁻⁵. Once temperature flips are gone, jitter is the main
+   from 0.66 to 8·10⁻⁵. Once temperature flips are gone, jitter is the main
    error source, and there majority-of-3 does help: key BER 1.8·10⁻³ →
    9.3·10⁻⁴ at σ 1 %, τ 0. 25 + 85 °C enrollment leaves every pair that
    crosses on the cold side, so failures only fall by about half
-   (σ 1 %, τ 32: 9.0 % → 4.3 %). The costs:
+   (σ 1 %, τ 32: 9.1 % → 4.3 %). The costs:
    - **Fewer pairs.** At σ 0.5 %, τ 64, 27 of 100 chips fail enrollment at
      −40 + 85 °C. With corner enrollment a smaller τ (16–32) is enough.
    - **This result is optimistic by construction.** In the model Δ is linear
