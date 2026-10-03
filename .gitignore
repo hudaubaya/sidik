@@ -1,0 +1,9 @@
+# SPDX-FileCopyrightText: 2026 Universitas Sriwijaya
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+__pycache__/
+*.pyc
+sim_build/
+results.xml
+*.vcd
+*.fst

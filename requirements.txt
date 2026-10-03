@@ -1,0 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Universitas Sriwijaya
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+cocotb==1.8.1
+numpy
+matplotlib
