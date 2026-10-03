@@ -33,6 +33,10 @@ make clean
 
 ## Licensing
 
+SIDIK is licensed under the GNU General Public License v3.0 or later
+(`GPL-3.0-or-later`); see [`LICENSE`](LICENSE).
+
+Third-party code keeps its own license, stated in its directory:
 `rtl/third_party/shaman/` is GPL-3.0-or-later (Pat Deegan). See
-[`docs/baselines.md`](docs/baselines.md#license-impact-on-sidik) for what that
-means for SIDIK releases. A project-level license has not been chosen yet.
+[`docs/baselines.md`](docs/baselines.md#license-impact-on-sidik) for what this
+means for SIDIK releases.

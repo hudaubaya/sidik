@@ -92,6 +92,5 @@ Caveats for reuse:
 Because the Shaman core is GPL-3.0-or-later, any SIDIK release that ships a
 bitstream, netlist or GDS containing it must be distributable under GPL-3.0
 (source available, same license). Apache-2.0 baselines are compatible with
-that. A project-level `LICENSE` for SIDIK has not been chosen yet; it should
-be GPL-3.0-or-later or a license that lets the combined work be released
-under GPL-3.0.
+that. SIDIK itself is GPL-3.0-or-later (top-level `LICENSE`), matching the
+Shaman core.
