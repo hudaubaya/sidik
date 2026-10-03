@@ -9,7 +9,7 @@ Hardware security building blocks for Tiny Tapeout / FPGA: a SHA-256 core
 
 | Path            | Contents |
 |-----------------|----------|
-| `rtl/`          | Synthesizable RTL. Third-party cores live unmodified in `rtl/third_party/<name>/` with their license and provenance. |
+| `rtl/`          | Synthesizable RTL: the RO-PUF measurement core ([`rtl/ropuf/`](rtl/ropuf/README.md)). Third-party cores live unmodified in `rtl/third_party/<name>/` with their license and provenance. |
 | `tb/`           | cocotb testbenches, one directory per DUT. |
 | `model/`        | Python reference models: SHA-256 padding, and the RO-PUF key generator model ([`docs/puf-model.md`](docs/puf-model.md)). |
 | `fpga/char/`    | FPGA characterization: acquisition (simulated backend for now), parameter fitting and reports ([`fpga/char/README.md`](fpga/char/README.md)). |
@@ -27,7 +27,8 @@ every pull request.
 sudo apt install iverilog
 make install      # pip install -r requirements.txt
 make test         # model, characterization and RTL tests
-make test-shaman  # one testbench
+make test-shaman  # one testbench (also: make test-ropuf)
+make synth-check  # yosys: check every RO keeps its stages (needs yosys)
 make puf-model    # rerun the RO-PUF Monte Carlo (~2.5 min), rewrites docs/puf-model/
 make clean
 ```

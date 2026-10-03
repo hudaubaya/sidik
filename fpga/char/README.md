@@ -3,8 +3,9 @@
 Scripts that turn RO-pair race measurements into the parameters of the PUF
 model (`model/ro_puf.py`) and into response-quality metrics.
 
-> **Status:** SIDIK has no RO-PUF RTL or register map yet, so there is no
-> hardware acquisition backend. Everything below runs end to end on
+> **Status:** `rtl/ropuf` and its register map exist, but there is no
+> hardware acquisition backend yet (it needs the RO-PUF integrated into an
+> FPGA design and a way to reach its registers). Everything below runs end to end on
 > **simulated** data from the model, and every report says so. Hardware data
 > can be fed in now if another tool writes the run format below.
 
@@ -32,7 +33,7 @@ One directory per run:
 | File | Contents |
 |---|---|
 | `deltas.csv` | Header `chip,temp_c,vdd_v,rep,pair,delta`; one row per race. `delta = count(RO 2·pair) − count(RO 2·pair+1)` when the first counter reaches the threshold. `vdd_v` is `nan` if not recorded. Every (chip, temperature, rep, pair) must be present exactly once at the nominal supply. |
-| `meta.json` | `source` (`"sim"` or `"hardware"`), `count_threshold`, `n_ro`. For hardware runs also record board, bitstream hash, chamber, supply and operator notes. |
+| `meta.json` | `source` (`"sim"` or `"hardware"`), `count_threshold`, `n_ro`, optional `delta_magnitude_bias` (default 0.5; use −1.5 for `rtl/ropuf`). For hardware runs also record board, bitstream hash, chamber, supply and operator notes. |
 
 Measured runs belong in `fpga/char/runs/<date>-<board>/` and should be
 committed together with their `meta.json`. `runs/sim-*` is git-ignored.
@@ -40,7 +41,9 @@ committed together with their `meta.json`. `runs/sim-*` is git-ignored.
 ## What analyze.py estimates
 
 Each race is converted to x = ln(f_a/f_b), which the counts give directly,
-after removing the half count the losing counter misses on average. In x the
+after removing the measurement's bias on |Δ| (`delta_magnitude_bias` in
+`meta.json`: +0.5 counts for the simulated race, about −1.5 for
+`rtl/ropuf`, see its README). In x the
 model is x(T) = x0 + s·ΔT/(1 + k0·ΔT), with s = k_a − k_b per pair and k0 the
 common tempco.
 
@@ -80,4 +83,6 @@ Implement `HardwareBackend` in `acquire.py`:
 - `measure(chip, n_reps)` returns an `(n_reps, n_pairs)` array of deltas
   read from the board.
 
-This needs the RO-PUF RTL and its register map in `rtl/` first.
+The register map is in `rtl/ropuf/README.md`: write PAIR, write CTRL=1,
+poll CTRL until BUSY clears, read DELTA. Hardware runs with this RTL should
+set `delta_magnitude_bias` to −1.5 in `meta.json`.
