@@ -103,7 +103,7 @@ merge. Tanggal dalam UTC.
 | 10 | 4 Okt | `rtl/fuzzy_ext.v`: enrollment/rekonstruksi sesuai model, penghapusan buffer, uji 200 chip virtual, uji mutasi | hijau, 4 mnt 47 dtk |
 | 11 | 4 Okt | `rtl/sidik_crypto.v`: derivasi K, HMAC, ID, KCV di atas Shaman, latensi tetap, uji 1.000 kasus | hijau, 7 mnt 23 dtk |
 | 12 | 4 Okt | <ul><li>`rtl/sidik_avmm.v`: register Avalon-MM, build rilis/`CHAR_BUILD`, tamper dan clear asinkron</li><li>port `zeroize` di `fuzzy_ext`/`sidik_crypto`</li><li>simulasi `ro_array` ~4× lebih cepat</li><li>batas waktu CI 30 menit</li></ul> | hijau, 6 mnt 57 dtk |
-| 13 | 4 Okt | <ul><li>laporan status sampai PR #12</li><li>`fpga/release/`: komponen `sidik`, dua instans di dua region LogicLock, LW HPS bridge + JTAG, KEY0 tamper</li><li>`sw/verifier.py`, `sidik_verifier.c`, `sidik_sim.py`</li><li>`tb/sidik_system`: simulasi sistem gabungan</li><li>parameter simulasi `RO_INDEX_BASE`</li></ul> | berjalan saat laporan ditulis (CI PR: hijau, 14 mnt 27 dtk) |
+| 13 | 4 Okt | <ul><li>laporan status sampai PR #12</li><li>`fpga/release/`: komponen `sidik`, dua instans di dua region LogicLock, LW HPS bridge + JTAG, KEY0 tamper</li><li>`sw/verifier.py`, `sidik_verifier.c`, `sidik_sim.py`</li><li>`tb/sidik_system`: simulasi sistem gabungan</li><li>parameter simulasi `RO_INDEX_BASE`</li></ul> | hijau, 14 mnt 53 dtk |
 
 ## 4. Temuan model (label: model)
 
@@ -285,7 +285,7 @@ kegagalan < 3/n".
 | Nama instans GHRD diasumsikan | `add_to_ghrd.tcl` gagal atau terhubung ke master yang salah | Override lewat `--cmd`; periksa peta alamat (window 0x40000–0x401FF harus kosong) |
 | Database verifier menyimpan respons | Siapa pun yang membaca atau mengubahnya (misalnya mengembalikan flag `used`) bisa memutar ulang respons | Simpan seperti kunci rahasia; batasi akses dan cadangkan dengan integritas |
 | Demo kloning di simulasi memakai RO perilaku lain | Membuktikan alur verifier, bukan keunikan chip nyata | Ulangi demo di board dengan larik A dan B nyata |
-| Waktu CI | ~14,5 menit per run setelah PR #13, batas 30 menit | Kurangi kasus di PR, jalankan penuh di main bila perlu |
+| Waktu CI | ~15 menit per run setelah PR #13 (dua kali lipat PR #12), batas 30 menit | Kurangi kasus di PR, jalankan penuh di main bila perlu |
 | Lisensi GPL-3.0 (Shaman) | Rilis yang memuat Shaman wajib GPL-3.0 | Lihat [`baselines.md`](baselines.md) |
 
 ## 9. Langkah berikutnya (urut prioritas)
