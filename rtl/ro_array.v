@@ -26,16 +26,52 @@ module ro_array #(
     genvar i;
     generate
         for (i = 0; i < N_RO; i = i + 1) begin : g_ro
-            assign ro_en[i] = en && (pair == i / 2);
+            // Scalar nets per RO: in simulation, reading or writing one bit of
+            // a 1024-bit vector net with 1024 drivers costs O(N) per toggle.
+            wire e = en && (pair == i / 2);
+            wire o;
             ro_cell #(.N_STAGES(N_STAGES), .INDEX(i)) u_ro (
-                .en  (ro_en[i]),
-                .out (ro_out[i])
+                .en  (e),
+                .out (o)
             );
+            assign ro_en[i]  = e;
+            assign ro_out[i] = o;
         end
     endgenerate
 
+`ifdef SIM
+    // Simulation only: select through OR trees of scalar nets, so that an RO
+    // toggle costs O(log N) instead of re-resolving the 1024-bit ro_out
+    // vector (about 4x faster in Icarus). Same function as the mux below,
+    // because every RO except the selected pair outputs 0.
+    localparam integer NP = N_RO / 2;
+    localparam integer LV = $clog2(NP);
+    genvar lv, n;
+    generate
+        for (lv = 0; lv <= LV; lv = lv + 1) begin : g_lv
+            for (n = 0; n < (1 << (LV - lv)); n = n + 1) begin : g_n
+                wire a, b;
+                if (lv == 0) begin : g_leaf
+                    if (n < NP) begin : g_ro_pair
+                        assign a = g_ro[2 * n].o;
+                        assign b = g_ro[2 * n + 1].o;
+                    end else begin : g_pad
+                        assign a = 1'b0;
+                        assign b = 1'b0;
+                    end
+                end else begin : g_node
+                    assign a = g_lv[lv - 1].g_n[2 * n].a | g_lv[lv - 1].g_n[2 * n + 1].a;
+                    assign b = g_lv[lv - 1].g_n[2 * n].b | g_lv[lv - 1].g_n[2 * n + 1].b;
+                end
+            end
+        end
+    endgenerate
+    assign ro_a = g_lv[LV].g_n[0].a;
+    assign ro_b = g_lv[LV].g_n[0].b;
+`else
     assign ro_a = ro_out[{pair, 1'b0}];
     assign ro_b = ro_out[{pair, 1'b1}];
+`endif
 
 endmodule
 

@@ -7,8 +7,10 @@
 #   make synth-check  yosys synthesis of the RO-PUF, secded72, fuzzy_ext and
 #                     sidik_crypto;
 #                     compile-check the CYCLONEV path of rtl/ro_cell.v
-#   make test-mutants mutation checks of the secded72, fuzzy_ext and
-#                     sidik_crypto testbenches
+#   make test-mutants mutation checks of the secded72, fuzzy_ext,
+#                     sidik_crypto and sidik_avmm testbenches
+#   make synth-check-full  yosys synthesis of the whole sidik_avmm (~3 min,
+#                     not in CI)
 #   make puf-model rerun the RO-PUF Monte Carlo (docs/puf-model/)
 #   make clean     remove simulation outputs
 
@@ -17,7 +19,7 @@ SIM    ?= icarus
 
 RTL_TESTS := shaman ropuf puf_meas secded72 fuzzy_ext sidik_crypto
 
-.PHONY: all install test test-model test-char test-sw test-rtl $(addprefix test-,$(RTL_TESTS)) check-tools test-mutants synth-check puf-model clean
+.PHONY: all install test test-model test-char test-sw test-rtl test-sidik_avmm synth-check-full $(addprefix test-,$(RTL_TESTS)) check-tools test-mutants synth-check puf-model clean
 
 all: test
 
@@ -35,7 +37,16 @@ test-char:
 test-sw:
 	cd sw && PYTHONPATH=../model $(PYTHON) -m unittest discover -v -p 'test_*.py'
 
-test-rtl: $(addprefix test-,$(RTL_TESTS))
+test-rtl: $(addprefix test-,$(RTL_TESTS)) test-sidik_avmm
+
+# sidik_avmm: all tests on the release build, the address scan on CHAR_BUILD.
+test-sidik_avmm: check-tools
+	$(MAKE) -C tb/sidik_avmm SIM=$(SIM)
+	@! grep -q '<failure' tb/sidik_avmm/results.xml || { echo "FAIL: tb/sidik_avmm (release)"; exit 1; }
+	$(MAKE) -C tb/sidik_avmm SIM=$(SIM) BUILD=char TESTCASE=test_flow_and_address_scan \
+		COCOTB_RESULTS_FILE=results_char.xml
+	@grep -q 'testcase' tb/sidik_avmm/results_char.xml && \
+		! grep -q '<failure' tb/sidik_avmm/results_char.xml || { echo "FAIL: tb/sidik_avmm (CHAR_BUILD)"; exit 1; }
 
 $(addprefix test-,$(RTL_TESTS)): test-%: check-tools
 	$(MAKE) -C tb/$* SIM=$(SIM)
@@ -45,6 +56,7 @@ test-mutants: check-tools
 	$(PYTHON) tb/secded72/mutants.py
 	$(PYTHON) tb/fuzzy_ext/mutants.py
 	$(PYTHON) tb/sidik_crypto/mutants.py
+	$(PYTHON) tb/sidik_avmm/mutants.py
 
 synth-check:
 	@command -v yosys >/dev/null || { echo "yosys not found (apt install yosys)"; exit 1; }
@@ -58,6 +70,15 @@ synth-check:
 	yosys -q -p "read_verilog rtl/third_party/shaman/tt_um_psychogenic_shaman.v rtl/sidik_crypto.v; synth -top sidik_crypto; check -assert"
 	@echo "OK, rtl/sidik_crypto.v synthesizes cleanly"
 
+AVMM_SOURCES := rtl/ro_cell.v rtl/ro_array.v rtl/puf_meas.v rtl/ropuf/ropuf_core.v \
+	rtl/secded72.v rtl/fuzzy_ext.v rtl/third_party/shaman/tt_um_psychogenic_shaman.v \
+	rtl/sidik_crypto.v rtl/sidik_avmm.v
+
+synth-check-full:
+	@command -v yosys >/dev/null || { echo "yosys not found (apt install yosys)"; exit 1; }
+	yosys -q -p "read_verilog $(AVMM_SOURCES); synth -top sidik_avmm; check -assert"
+	@echo "OK, rtl/sidik_avmm.v (release build) synthesizes cleanly"
+
 puf-model:
 	$(PYTHON) model/puf_montecarlo.py --out docs/puf-model
 
@@ -66,7 +87,7 @@ check-tools:
 	@command -v cocotb-config >/dev/null || { echo "cocotb not found (make install)"; exit 1; }
 
 clean:
-	for t in $(RTL_TESTS); do \
+	for t in $(RTL_TESTS) sidik_avmm; do \
 		$(MAKE) -C tb/$$t clean; \
 		rm -f tb/$$t/results.xml tb/$$t/tb.vcd; \
 	done

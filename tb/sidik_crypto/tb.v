@@ -28,7 +28,7 @@ module tb;
     wire [255:0] result;
 
     sidik_crypto u_crypto (
-        .clk(clk), .rst(rst), .start(start), .op(op), .key_bits(key_bits),
+        .clk(clk), .rst(rst), .zeroize(1'b0), .start(start), .op(op), .key_bits(key_bits),
         .challenge(challenge), .clear(clear), .busy(busy), .done(done),
         .error(error), .result(result), .k_valid(k_valid));
 
