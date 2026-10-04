@@ -15,7 +15,7 @@ Hardware security building blocks for Tiny Tapeout / FPGA: a SHA-256 core
 | `fpga/char/`    | FPGA characterization: DE10-Nano Quartus project with a JTAG to Avalon master, System Console measurement script, parameter fitting and reports ([`fpga/char/README.md`](fpga/char/README.md), team steps in [`docs/char_howto.md`](docs/char_howto.md)). Not yet run on a board. |
 | `fpga/release/` | FPGA release builds. |
 | `sw/`           | Host software: `analyze.py` computes the model's PUF metrics from measured race CSVs. |
-| `docs/`         | Documentation; project status as of 2026-10-03 in [`docs/status.md`](docs/status.md) (Indonesian); baseline sources and licenses are in [`docs/baselines.md`](docs/baselines.md). |
+| `docs/`         | Documentation; project status as of 2026-10-04 in [`docs/status.md`](docs/status.md) (Indonesian); baseline sources and licenses are in [`docs/baselines.md`](docs/baselines.md). |
 
 ## Running the tests
 

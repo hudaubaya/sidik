@@ -1,14 +1,16 @@
 # Laporan status proyek SIDIK
 
-Rekap pekerjaan PR #1 – #8, per 3 Oktober 2026 (UTC), main di commit
-`fed3172`. Laporan ini adalah potret pada tanggal tersebut. Perbarui atau
+Rekap pekerjaan PR #1 – #12, per 4 Oktober 2026 (UTC), main di commit
+`5267c48`. Laporan ini adalah potret pada tanggal tersebut. Perbarui atau
 tandai usang setelah ada perubahan besar, terutama setelah ada data board.
 
 > **Belum ada satu pun hasil dari hardware.** Semua angka PUF di laporan ini
 > adalah keluaran model dengan parameter asumsi, bukan pengukuran.
 >
 > **Proyek Quartus DE10-Nano belum pernah dikompilasi**, karena Quartus tidak
-> tersedia di lingkungan pengembangan. Pengujiannya baru offline.
+> tersedia di lingkungan pengembangan. Pengujiannya baru offline. Hal yang
+> sama berlaku untuk generator kunci lengkap (`rtl/sidik_avmm.v`): ia baru
+> berjalan di simulasi.
 >
 > **Yang sudah terbukti:** perilaku RTL di simulasi (cocotb/Icarus),
 > kesetaraan RTL dengan model Python, dan sintesis generik (yosys). Semua CI
@@ -20,7 +22,7 @@ SIDIK adalah kumpulan blok keamanan hardware untuk Tiny Tapeout / FPGA:
 - core SHA-256 (Shaman, pihak ketiga, GPL-3.0);
 - generator kunci berbasis RO-PUF dengan secure sketch SECDED.
 
-Dalam delapan PR yang semuanya sudah di-merge ke main, repositori ini
+Dalam dua belas PR yang semuanya sudah di-merge ke main, repositori ini
 sekarang berisi:
 
 - **Model perilaku dan studi Monte Carlo** generator kunci RO-PUF, termasuk
@@ -28,8 +30,15 @@ sekarang berisi:
 - **RTL tersimulasi:**
   - ring oscillator dan array 1.024 RO;
   - pengukur pasangan dengan prescaler dan sinkronisasi 50 MHz;
-  - core Avalon-MM;
-  - dekoder SECDED (72,64) yang bit-exact dengan model.
+  - core Avalon-MM untuk karakterisasi;
+  - dekoder SECDED (72,64) yang bit-exact dengan model;
+  - fuzzy extractor (`fuzzy_ext.v`): enrollment dan rekonstruksi yang
+    identik dengan model pada 200 chip virtual;
+  - derivasi K, HMAC-SHA256, ID dan KCV di atas core Shaman
+    (`sidik_crypto.v`), dengan latensi tetap;
+  - generator kunci lengkap di balik register Avalon-MM (`sidik_avmm.v`):
+    RO → fuzzy extractor → crypto, tanpa jalur baca ke K atau data mentah di
+    build rilis, dengan tamper dan clear asinkron.
 - **Jalur karakterisasi FPGA:**
   - proyek Quartus DE10-Nano dengan JTAG-to-Avalon Master;
   - skrip System Console;
@@ -52,8 +61,11 @@ kegagalan dan mode enrollment.
 | Proyek Quartus (`fpga/char/quartus/`) | <ul><li>nama di QSF/SDC ada di RTL</li><li>QSF/SDC lolos parse Tcl</li><li>top level terkompilasi (iverilog + stub)</li></ul> | Kompilasi Quartus, Ignored Assignments, timing, region LogicLock, pin |
 | Skrip System Console | Protokol register dan format CSV diuji terhadap mock di tclsh | Akses JTAG nyata; cara System Console meneruskan argumen |
 | Analisis (`sw/analyze.py`) | <ul><li>20 test</li><li>keputusan rekonstruksi identik dengan model pada vote yang sama (300 percobaan)</li><li>4 mutan tertangkap</li></ul> | Belum pernah dijalankan pada data board |
+| Fuzzy extractor (`rtl/fuzzy_ext.v`) | <ul><li>200 chip virtual, 768 rekonstruksi: helper, kunci, `fail`, `attempts`, `kcv_caught` identik dengan model</li><li>mencakup enrollment gagal, dua suhu, ukur ulang, gagal, KCV menangkap miskoreksi</li><li>penghapusan buffer diperiksa; 8 mutan terbunuh</li></ul> | Dengan race dari RO nyata; ukuran (~24 ribu sel generik) belum dioptimalkan |
+| Crypto (`rtl/sidik_crypto.v`) | <ul><li>1.000 kunci/challenge acak identik dengan `hashlib`/`hmac` dan model</li><li>latensi tetap: 777 siklus (derive), 2.833 siklus (HMAC)</li><li>0 pelanggaran protokol Shaman; state core terhapus setelah tiap operasi</li><li>4 mutan terbunuh</li></ul> | Kanal samping (daya/EM); sintesis untuk target |
+| Generator kunci (`rtl/sidik_avmm.v`) | <ul><li>alur ENROLL → RECONSTRUCT → AUTH benar (ID, KCV, RESP = `hmac` Python)</li><li>pemindaian 64 alamat: tidak ada K, bit kunci atau counter mentah di build rilis; `CHAR_BUILD` memang memperlihatkan counter mentah</li><li>tamper pada siklus acak: semua state nol dalam ≤ 3 tepi clock; TAMPERED bertahan sampai `rst`</li><li>state ilegal → CLEAR; 3 mutan terbunuh</li><li>yosys: ~64 ribu sel generik, 0 masalah</li></ul> | Di FPGA; dengan `LOG2N = 14` dan `N_ENROLL = 16` (simulasi memakai 8 dan 4); bukti struktural tidak adanya jalur baca; timing reset asinkron `zeroize` |
 
-## 3. Riwayat pekerjaan (PR #1 – #8)
+## 3. Riwayat pekerjaan (PR #1 – #12)
 
 Semua PR di-merge setelah CI hijau. Durasi adalah run CI di main setelah
 merge. Tanggal dalam UTC.
@@ -68,6 +80,10 @@ merge. Tanggal dalam UTC.
 | 6 | 3 Okt | `rtl/secded72.v` (Hamming diperluas); model dipindah dari Hsiao ke Hamming diperluas; uji mutasi | hijau, 88 dtk |
 | 7 | 3 Okt | `rtl/ro_cell.v`, `ro_array.v`, `puf_meas.v` (prescaler, sinkronisasi 50 MHz); `rtl/ropuf` dibangun ulang di atasnya | hijau, 90 dtk |
 | 8 | 3 Okt | Proyek Quartus DE10-Nano, skrip System Console, `sw/analyze.py`, [`char_howto.md`](char_howto.md) | hijau, 151 dtk |
+| 9 | 3 Okt | Laporan status ini (`docs/status.md`) | hijau, 91 dtk |
+| 10 | 4 Okt | `rtl/fuzzy_ext.v`: enrollment/rekonstruksi sesuai model, penghapusan buffer, uji 200 chip virtual, uji mutasi | hijau, 4 mnt 47 dtk |
+| 11 | 4 Okt | `rtl/sidik_crypto.v`: derivasi K, HMAC, ID, KCV di atas Shaman, latensi tetap, uji 1.000 kasus | hijau, 7 mnt 23 dtk |
+| 12 | 4 Okt | <ul><li>`rtl/sidik_avmm.v`: register Avalon-MM, build rilis/`CHAR_BUILD`, tamper dan clear asinkron</li><li>port `zeroize` di `fuzzy_ext`/`sidik_crypto`</li><li>simulasi `ro_array` ~4× lebih cepat</li><li>batas waktu CI 30 menit</li></ul> | hijau, 6 mnt 57 dtk |
 
 ## 4. Temuan model (label: model)
 
@@ -128,10 +144,13 @@ tidak ada kunci salah yang lolos diam-diam di konfigurasi mana pun
 | Modul | Isi dan catatan |
 |---|---|
 | `ro_cell.v` | NAND enable + 4 inverter. Tiga jalur: <ul><li>`SIM`: perilaku, periode dari parameter/seed</li><li>`CYCLONEV`: LUT + primitif `lcell`</li><li>generik: instance `ro_stage` yang dipertahankan</li></ul> |
-| `ro_array.v` | 1.024 RO dalam pasangan saling lepas (2i, 2i+1); hanya pasangan terpilih yang di-enable. |
+| `ro_array.v` | 1.024 RO dalam pasangan saling lepas (2i, 2i+1); hanya pasangan terpilih yang di-enable. Di simulasi, pasangan dipilih lewat pohon OR (fungsi sama, ~4× lebih cepat). |
 | `puf_meas.v` | Dua counter balapan sampai 2¹⁴ siklus RO di belakang prescaler ripple /2; sinkronizer 2-FF; keluaran tanda dan \|Δ\| di domain 50 MHz. Catatan: <ul><li>resolusi Δ = 2 siklus RO</li><li>zona mati: \|Δ ideal\| ≤ 4 count terbaca Δ = 0</li><li>bias \|Δ\| rata-rata −3 count</li></ul> |
-| `ropuf/ropuf_core.v`, `ropuf_avmm.v` | Core + slave Avalon-MM (ID, PARAMS, CTRL, PAIR, COUNT_A/B, DELTA, TIMEOUT). Catatan keamanan: register ini membuka respons mentah dan hanya untuk karakterisasi. |
+| `ropuf/ropuf_core.v`, `ropuf_avmm.v` | Core + slave Avalon-MM (ID, PARAMS, CTRL, PAIR, COUNT_A/B, DELTA, TIMEOUT). Catatan keamanan: `ropuf_avmm` membuka respons mentah dan hanya untuk karakterisasi. |
 | `secded72.v` | Sindrom Hamming (72,64) diperluas: koreksi 1 bit, deteksi 2 bit; bit-exact dengan `model/secded.py`. |
+| `fuzzy_ext.v` | Enrollment (mask 512 bit + sindrom sebagai helper data, satu fase per suhu) dan rekonstruksi (mayoritas 3, SECDED, ukur ulang, maks. 3 ronde, `fail`). KCV diperiksa oleh konsumen lewat `key_valid`/`key_good`. Buffer dihapus setelah dipakai; `zeroize` asinkron. |
+| `sidik_crypto.v` | Di atas Shaman tanpa modifikasi: K = SHA-256(216 bit ‖ "SIDIK-K"), HMAC(K, challenge), ID, KCV. K tidak keluar dari modul. Latensi tetap; core di-reset setelah tiap hash; `zeroize` asinkron. |
+| `sidik_avmm.v` | Generator kunci lengkap di balik slave Avalon-MM: CTRL (ENROLL, RECONSTRUCT, AUTH, CLEAR), STATUS, TAU, HELPER, CHAL, RESP, ID. Build rilis tanpa jalur baca ke K/data mentah; `CHAR_BUILD` menambah register race mentah. `tamper_n` (sinkronizer 2-FF) → clear asinkron, TAMPERED bertahan sampai `rst`. |
 | `third_party/shaman/` | Core SHA-256 Pat Deegan (GPL-3.0), tidak dimodifikasi. |
 
 ## 6. Jalur karakterisasi FPGA
@@ -172,7 +191,10 @@ kegagalan < 3/n".
 | QSF/SDC belum diterima Quartus | Region atau constraint diam-diam tidak berlaku | Langkah 2 di [`char_howto.md`](char_howto.md) |
 | Parameter model hanya asumsi | Pilihan τ, mode enrollment dan klaim kegagalan bisa salah | Karakterisasi, lalu ulangi Monte Carlo |
 | Tempco non-linier, tegangan, aging tidak dimodelkan | Hasil enrollment −40 + 85 °C terlalu optimistis | Ukur ≥ 3 suhu; uji linearitas |
-| Register membuka respons mentah | Kunci bisa dihitung ulang dari bus | Hanya untuk build karakterisasi; build kunci harus menutupnya |
+| Register membuka respons mentah | Kunci bisa dihitung ulang dari bus | `ropuf_avmm` dan `CHAR_BUILD` hanya untuk karakterisasi. Build rilis `sidik_avmm` tidak punya jalur baca (dibuktikan perilaku lewat pemindaian dan mutan, belum struktural) |
+| `zeroize` = OR tiga flip-flop sebagai reset asinkron | Glitch hanya menambah clear, tetapi timing recovery/removal belum dicek | Constraint dan analisis timing di Quartus |
+| Parameter simulasi berbeda dari rilis | `sidik_avmm` diuji dengan `LOG2N = 8`, `N_ENROLL = 4` (rilis 14 dan 16) | Uji di FPGA dengan parameter rilis |
+| Waktu CI | ~7 menit per run, batas 30 menit | Kurangi kasus di PR, jalankan penuh di main bila perlu |
 | Lisensi GPL-3.0 (Shaman) | Rilis yang memuat Shaman wajib GPL-3.0 | Lihat [`baselines.md`](baselines.md) |
 
 ## 8. Langkah berikutnya (urut prioritas)
@@ -186,14 +208,19 @@ kegagalan < 3/n".
    (seri board, hash bitstream, versi Quartus, kondisi).
 5. Fit parameter dan ulangi Monte Carlo. Tetapkan τ dan mode enrollment dari
    data, bukan dari asumsi.
-6. Rancang build kunci tanpa register respons mentah (enrollment dan
-   rekonstruksi di hardware).
+6. Build `sidik_avmm` (rilis) di Quartus dengan parameter rilis, lalu uji
+   ENROLL/RECONSTRUCT/AUTH dan tamper di board.
+7. Tambahkan pemeriksaan struktural bahwa `k_q` dan data mentah tidak punya
+   jalur ke `avs_readdata` (misalnya analisis cone di yosys).
+8. Ekspos enrollment dua suhu di register API, karena hasil model
+   menunjukkan manfaatnya terbesar.
 
 ## Lampiran: reproduksi
 
 | Perintah | Fungsi |
 |---|---|
 | `make install` | Pasang cocotb 1.8.1, numpy, matplotlib |
-| `make test` | Model (25), karakterisasi (19), sw (20), RTL cocotb (shaman 3, ropuf 5, puf_meas 5, secded72 4), mutan secded72 |
-| `make synth-check` | yosys: RO utuh; jalur CYCLONEV terkompilasi; secded72 bersih |
+| `make test` | Model (25), karakterisasi (19), sw (20), RTL cocotb (shaman 3, ropuf 5, puf_meas 5, secded72 4, fuzzy_ext 4, sidik_crypto 3, sidik_avmm 4 + 1 di `CHAR_BUILD`), mutan (secded72 2, fuzzy_ext 8, sidik_crypto 4, sidik_avmm 3) |
+| `make synth-check` | yosys: RO utuh; jalur CYCLONEV terkompilasi; secded72, fuzzy_ext dan sidik_crypto bersih |
+| `make synth-check-full` | yosys: `sidik_avmm` utuh (~3 menit, tidak di CI) |
 | `make puf-model` | Ulangi Monte Carlo model (~2,5 menit) ke `docs/puf-model/` |
