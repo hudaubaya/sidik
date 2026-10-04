@@ -46,6 +46,8 @@
 //   clears them if the enrollment is not finished, and so does any
 //   reconstruction started in between (a pending enrollment is then lost).
 //   The key output is forced to 0 whenever key_valid is low.
+//   zeroize (asynchronous, e.g. tamper) clears every register at once; an
+//   illegal FSM state erases like a failure.
 //
 // Status: busy while working; done (with fail) stays high until the next
 // command. attempts = 1 + re-measurement rounds, kcv_caught = a KCV
@@ -62,6 +64,7 @@ module fuzzy_ext #(
 ) (
     input  wire                 clk,
     input  wire                 rst,
+    input  wire                 zeroize,      // async: erase everything now
 
     input  wire                 cmd_enroll,
     input  wire                 cmd_recon,
@@ -167,8 +170,9 @@ module fuzzy_ext #(
         end
     endfunction
 
-    always @(posedge clk) begin
-        if (rst) begin
+    // Every register of the FSM to its reset value (async zeroize and rst).
+    task clear_all;
+        begin
             state       <= S_IDLE;
             recon       <= 1'b0;
             first_q     <= 1'b0;
@@ -194,6 +198,14 @@ module fuzzy_ext #(
             attempts    <= 3'd0;
             kcv_caught  <= 1'b0;
             n_pass      <= {(PW+1){1'b0}};
+        end
+    endtask
+
+    always @(posedge clk or posedge zeroize) begin
+        if (zeroize) begin
+            clear_all;
+        end else if (rst) begin
+            clear_all;
         end else if (cmd_abort) begin
             fail_next <= 1'b1;
             state     <= S_ZERO;
@@ -409,7 +421,11 @@ module fuzzy_ext #(
                     state     <= S_IDLE;
                 end
 
-                default: state <= S_IDLE;
+                // Illegal state: erase like a failure.
+                default: begin
+                    fail_next <= 1'b1;
+                    state     <= S_ZERO;
+                end
             endcase
         end
     end

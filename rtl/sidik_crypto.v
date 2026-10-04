@@ -40,6 +40,10 @@
 // `error` is set (never expected; the core's timing is data independent).
 // An HMAC operation without a derived K finishes at the same cycle with
 // error set and a zero result.
+//
+// zeroize (asynchronous, e.g. tamper) clears every register at once and
+// holds the Shaman core in reset (its state clears on the next clock edge).
+// An illegal FSM state erases K and all intermediate values.
 module sidik_crypto #(
     parameter integer RST_CYCLES = 2,
     parameter integer GAP        = 2,
@@ -48,6 +52,7 @@ module sidik_crypto #(
 ) (
     input  wire         clk,
     input  wire         rst,
+    input  wire         zeroize,    // async: erase K and all state now
     input  wire         start,
     input  wire [1:0]   op,
     input  wire [215:0] key_bits,
@@ -173,9 +178,9 @@ module sidik_crypto #(
     end
 
     // ---- control -----------------------------------------------------------------
-    always @(posedge clk) begin
-        done <= 1'b0;
-        if (rst) begin
+    // Every register of the FSM to its reset value (async zeroize and rst).
+    task clear_all;
+        begin
             state      <= S_IDLE;
             core_rst   <= 1'b1;
             sh_start   <= 1'b0;
@@ -195,7 +200,17 @@ module sidik_crypto #(
             error      <= 1'b0;
             result     <= 256'd0;
             k_valid    <= 1'b0;
+            done       <= 1'b0;
+        end
+    endtask
+
+    always @(posedge clk or posedge zeroize) begin
+        if (zeroize) begin
+            clear_all;
+        end else if (rst) begin
+            clear_all;
         end else begin
+            done <= 1'b0;
             cyc <= cyc + 1'b1;
             case (state)
                 S_IDLE: begin
@@ -344,7 +359,17 @@ module sidik_crypto #(
                     end
                 end
 
-                default: state <= S_IDLE;
+                // Illegal state: erase K and every intermediate value.
+                default: begin
+                    core_rst <= 1'b1;
+                    k_q      <= 256'd0;
+                    k_valid  <= 1'b0;
+                    inner_q  <= 256'd0;
+                    dig      <= 256'd0;
+                    result   <= 256'd0;
+                    error    <= 1'b1;
+                    state    <= S_IDLE;
+                end
             endcase
         end
     end

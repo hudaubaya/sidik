@@ -18,7 +18,7 @@ register interface.
 | File | Contents |
 |---|---|
 | `../ro_cell.v` | One RO: NAND enable + (N_STAGES−1) inverters. Generic path: each stage a preserved `ro_stage` instance. `CYCLONEV`: LUT + `lcell` primitive per stage. `SIM`: behavioural oscillator, half-period from `HALF_PERIOD_NS` or from `+RO_SEED`. |
-| `../ro_array.v` | 1024 ROs in pairs; only the selected pair is enabled. |
+| `../ro_array.v` | 1024 ROs in pairs; only the selected pair is enabled. Under `SIM` the pair is selected through OR trees of scalar nets instead of the 1024-bit mux (same function, since unselected ROs output 0; about 4× faster in Icarus). |
 | `../puf_meas.v` | Two racing counters behind a ripple prescaler, control FSM, sign and magnitude of Δ in the 50 MHz domain. |
 | `ropuf_core.v` | Latches the pair; `ro_array` + `puf_meas`. |
 | `ropuf_avmm.v` | Avalon-MM slave (register map below). |

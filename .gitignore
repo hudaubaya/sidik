@@ -5,6 +5,8 @@ __pycache__/
 *.pyc
 sim_build/
 results.xml
+results_*.xml
+sim_build_*/
 *.vcd
 *.fst
 # simulated characterization runs (measured runs are committed)

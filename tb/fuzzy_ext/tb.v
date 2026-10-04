@@ -38,7 +38,7 @@ module tb;
     wire [9:0]   n_pass;
 
     fuzzy_ext u_fe (
-        .clk(clk), .rst(rst),
+        .clk(clk), .rst(rst), .zeroize(1'b0),
         .cmd_enroll(cmd_enroll), .cmd_recon(cmd_recon), .cmd_abort(cmd_abort),
         .enroll_first(enroll_first), .enroll_last(enroll_last), .tau(tau),
         .helper_mask_in(helper_mask_in), .helper_syn_in(helper_syn_in),
