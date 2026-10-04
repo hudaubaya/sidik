@@ -14,6 +14,7 @@ module ropuf_core #(
     parameter integer N_STAGES = 5,
     parameter integer LOG2N = 14,
     parameter integer PRESCALE_LOG2 = 1,
+    parameter integer RO_INDEX_BASE = 0,   // SIM only, see ro_array
     parameter integer PAIR_W = $clog2(N_RO / 2)
 ) (
     input  wire                 clk,
@@ -41,7 +42,7 @@ module ropuf_core #(
             sel <= pair;
     end
 
-    ro_array #(.N_RO(N_RO), .N_STAGES(N_STAGES)) u_array (
+    ro_array #(.N_RO(N_RO), .N_STAGES(N_STAGES), .INDEX_BASE(RO_INDEX_BASE)) u_array (
         .en(ro_run), .pair(sel), .ro_a(ro_a), .ro_b(ro_b),
         .ro_en(), .ro_out());
 

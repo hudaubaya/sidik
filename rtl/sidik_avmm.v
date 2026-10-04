@@ -51,7 +51,10 @@ module sidik_avmm #(
     parameter integer LOG2N         = 14,
     parameter integer PRESCALE_LOG2 = 1,
     parameter integer N_ENROLL      = 16,     // races averaged per pair at enrollment
-    parameter [31:0]  MEAS_TIMEOUT  = 32'd1048576
+    parameter [31:0]  MEAS_TIMEOUT  = 32'd1048576,
+    // Simulation only: the behavioural ROs of this instance are RO_INDEX_BASE
+    // + i, so that two instances model two different chips.
+    parameter integer RO_INDEX_BASE = 0
 ) (
     input  wire        clk,
     input  wire        rst,
@@ -102,7 +105,7 @@ module sidik_avmm #(
     wire signed [LOG2N+1:0] core_delta;
 
     ropuf_core #(.N_RO(N_RO), .N_STAGES(N_STAGES), .LOG2N(LOG2N),
-                 .PRESCALE_LOG2(PRESCALE_LOG2)) u_core (
+                 .PRESCALE_LOG2(PRESCALE_LOG2), .RO_INDEX_BASE(RO_INDEX_BASE)) u_core (
         .clk(clk), .rst(rst | zeroize), .start(core_start), .pair(core_pair),
         .timeout(MEAS_TIMEOUT), .busy(core_busy), .done(core_done),
         .timed_out(core_timed_out), .count_a(core_count_a),

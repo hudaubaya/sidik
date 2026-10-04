@@ -13,6 +13,7 @@
 module ro_array #(
     parameter integer N_RO = 1024,
     parameter integer N_STAGES = 5,
+    parameter integer INDEX_BASE = 0,   // SIM only: RO i models RO INDEX_BASE + i
     parameter integer PAIR_W = $clog2(N_RO / 2)
 ) (
     input  wire              en,
@@ -30,7 +31,7 @@ module ro_array #(
             // a 1024-bit vector net with 1024 drivers costs O(N) per toggle.
             wire e = en && (pair == i / 2);
             wire o;
-            ro_cell #(.N_STAGES(N_STAGES), .INDEX(i)) u_ro (
+            ro_cell #(.N_STAGES(N_STAGES), .INDEX(INDEX_BASE + i)) u_ro (
                 .en  (e),
                 .out (o)
             );
