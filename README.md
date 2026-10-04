@@ -9,7 +9,7 @@ Hardware security building blocks for Tiny Tapeout / FPGA: a SHA-256 core
 
 | Path            | Contents |
 |-----------------|----------|
-| `rtl/`          | Synthesizable RTL: ring oscillators (`ro_cell.v`, `ro_array.v`), pair measurement (`puf_meas.v`), the Avalon-MM RO-PUF core built from them ([`rtl/ropuf/`](rtl/ropuf/README.md)), the extended Hamming (72,64) SECDED syndrome decoder (`secded72.v`, bit-exact with `model/secded.py`), and the fuzzy extractor (`fuzzy_ext.v`: enrollment and reconstruction FSM with buffer erasure, checked against `model/ro_puf.py` on 200 virtual chips). Third-party cores live unmodified in `rtl/third_party/<name>/` with their license and provenance. |
+| `rtl/`          | Synthesizable RTL: ring oscillators (`ro_cell.v`, `ro_array.v`), pair measurement (`puf_meas.v`), the Avalon-MM RO-PUF core built from them ([`rtl/ropuf/`](rtl/ropuf/README.md)), the extended Hamming (72,64) SECDED syndrome decoder (`secded72.v`, bit-exact with `model/secded.py`), the fuzzy extractor (`fuzzy_ext.v`: enrollment and reconstruction FSM with buffer erasure, checked against `model/ro_puf.py` on 200 virtual chips), and `sidik_crypto.v`: K = SHA-256(key ‖ "SIDIK-K"), HMAC-SHA256 with a 32-byte challenge, ID and key-check HMACs on the unmodified Shaman core, at a fixed cycle count. Third-party cores live unmodified in `rtl/third_party/<name>/` with their license and provenance. |
 | `tb/`           | cocotb testbenches, one directory per DUT. |
 | `model/`        | Python reference models: SHA-256 padding, and the RO-PUF key generator model ([`docs/puf-model.md`](docs/puf-model.md)). |
 | `fpga/char/`    | FPGA characterization: DE10-Nano Quartus project with a JTAG to Avalon master, System Console measurement script, parameter fitting and reports ([`fpga/char/README.md`](fpga/char/README.md), team steps in [`docs/char_howto.md`](docs/char_howto.md)). Not yet run on a board. |
@@ -29,8 +29,8 @@ every pull request.
 sudo apt install iverilog
 make install      # pip install -r requirements.txt
 make test         # model, characterization, sw and RTL tests
-make test-shaman  # one testbench (also: test-ropuf, test-puf_meas, test-secded72, test-fuzzy_ext)
-make test-mutants # the secded72 and fuzzy_ext tests must fail on mutated RTL copies
+make test-shaman  # one testbench (also: test-ropuf, test-puf_meas, test-secded72, test-fuzzy_ext, test-sidik_crypto)
+make test-mutants # the secded72, fuzzy_ext and sidik_crypto tests must fail on mutated RTL copies
 make synth-check  # yosys: check every RO keeps its stages (needs yosys)
 make puf-model    # rerun the RO-PUF Monte Carlo (~2.5 min), rewrites docs/puf-model/
 make clean
