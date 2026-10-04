@@ -13,23 +13,23 @@ Hardware security building blocks for Tiny Tapeout / FPGA: a SHA-256 core
 | `tb/`           | cocotb testbenches, one directory per DUT. |
 | `model/`        | Python reference models: SHA-256 padding, and the RO-PUF key generator model ([`docs/puf-model.md`](docs/puf-model.md)). |
 | `fpga/char/`    | FPGA characterization: DE10-Nano Quartus project with a JTAG to Avalon master, System Console measurement script, parameter fitting and reports ([`fpga/char/README.md`](fpga/char/README.md), team steps in [`docs/char_howto.md`](docs/char_howto.md)). Not yet run on a board. |
-| `fpga/release/` | FPGA release builds. |
-| `sw/`           | Host software: `analyze.py` computes the model's PUF metrics from measured race CSVs. |
+| `fpga/release/` | DE10-Nano release build: Platform Designer component (`sidik_hw.tcl`), two SIDIK instances (larik A and B) in two LogicLock regions, reached through the lightweight HPS bridge (`add_to_ghrd.tcl`, GHRD) and a JTAG to Avalon master, KEY0 as tamper ([`fpga/release/README.md`](fpga/release/README.md)). Not yet compiled or run on a board. |
+| `sw/`           | Host software: `analyze.py` computes the model's PUF metrics from measured race CSVs; `verifier.py` and its C twin `sidik_verifier.c` (enrollment with stored challenge-response pairs, one-time-challenge authentication, clone demo) over `/dev/mem`, JTAG or the device model `sidik_sim.py` ([`sw/README.md`](sw/README.md)). |
 | `docs/`         | Documentation; project status as of 2026-10-04 in [`docs/status.md`](docs/status.md) (Indonesian); baseline sources and licenses are in [`docs/baselines.md`](docs/baselines.md). |
 
 ## Running the tests
 
-Needs Python 3 (tested on 3.11), Icarus Verilog (tested on 12.0) and, for
-the System Console script check, `tclsh` (`apt install tcl`; skipped if
-missing). CI
+Needs Python 3 (tested on 3.11), Icarus Verilog (tested on 12.0), `gcc`
+for the C verifier and, for the Tcl script checks, `tclsh` (`apt install
+tcl`; skipped if missing). CI
 (`.github/workflows/test.yml`) runs `make test` on every push to `main` and
 every pull request.
 
 ```sh
 sudo apt install iverilog
 make install      # pip install -r requirements.txt
-make test         # model, characterization, sw and RTL tests
-make test-shaman  # one testbench (also: test-ropuf, test-puf_meas, test-secded72, test-fuzzy_ext, test-sidik_crypto, test-sidik_avmm)
+make test         # model, characterization, release, sw and RTL tests
+make test-shaman  # one testbench (also: test-ropuf, test-puf_meas, test-secded72, test-fuzzy_ext, test-sidik_crypto, test-sidik_avmm, test-sidik_system)
 make test-mutants # the secded72, fuzzy_ext, sidik_crypto and sidik_avmm tests must fail on mutated RTL copies
 make synth-check  # yosys: check every RO keeps its stages (needs yosys)
 make synth-check-full # yosys: the whole sidik_avmm (~3 min, not in CI)

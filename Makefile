@@ -3,7 +3,8 @@
 
 # SIDIK top-level Makefile.
 #   make install   install Python deps (cocotb, numpy, matplotlib)
-#   make test      run every test (model, characterization, sw and RTL tests)
+#   make test      run every test (model, characterization, release, sw and
+#                  RTL tests)
 #   make synth-check  yosys synthesis of the RO-PUF, secded72, fuzzy_ext and
 #                     sidik_crypto;
 #                     compile-check the CYCLONEV path of rtl/ro_cell.v
@@ -19,14 +20,14 @@ SIM    ?= icarus
 
 RTL_TESTS := shaman ropuf puf_meas secded72 fuzzy_ext sidik_crypto
 
-.PHONY: all install test test-model test-char test-sw test-rtl test-sidik_avmm synth-check-full $(addprefix test-,$(RTL_TESTS)) check-tools test-mutants synth-check puf-model clean
+.PHONY: all install test test-model test-char test-release test-sw test-rtl test-sidik_avmm test-sidik_system synth-check-full $(addprefix test-,$(RTL_TESTS)) check-tools test-mutants synth-check puf-model clean
 
 all: test
 
 install:
 	$(PYTHON) -m pip install -r requirements.txt
 
-test: test-model test-char test-sw test-rtl test-mutants
+test: test-model test-char test-release test-sw test-rtl test-mutants
 
 test-model:
 	cd model && $(PYTHON) -m unittest discover -v -p 'test_*.py'
@@ -34,10 +35,13 @@ test-model:
 test-char:
 	cd fpga/char && PYTHONPATH=../../model $(PYTHON) -m unittest discover -v -p 'test_*.py'
 
+test-release:
+	cd fpga/release && PYTHONPATH=../../model $(PYTHON) -m unittest discover -v -p 'test_*.py'
+
 test-sw:
 	cd sw && PYTHONPATH=../model $(PYTHON) -m unittest discover -v -p 'test_*.py'
 
-test-rtl: $(addprefix test-,$(RTL_TESTS)) test-sidik_avmm
+test-rtl: $(addprefix test-,$(RTL_TESTS)) test-sidik_avmm test-sidik_system
 
 # sidik_avmm: all tests on the release build, the address scan on CHAR_BUILD.
 test-sidik_avmm: check-tools
@@ -47,6 +51,13 @@ test-sidik_avmm: check-tools
 		COCOTB_RESULTS_FILE=results_char.xml
 	@grep -q 'testcase' tb/sidik_avmm/results_char.xml && \
 		! grep -q '<failure' tb/sidik_avmm/results_char.xml || { echo "FAIL: tb/sidik_avmm (CHAR_BUILD)"; exit 1; }
+
+# Combined fpga/release system (two instances, address decoder) driven by
+# sw/verifier.py and sw/sidik_verifier.c.
+test-sidik_system: check-tools
+	$(MAKE) -C tb/sidik_system SIM=$(SIM)
+	@grep -q 'testcase' tb/sidik_system/results.xml && \
+		! grep -q '<failure' tb/sidik_system/results.xml || { echo "FAIL: tb/sidik_system"; exit 1; }
 
 $(addprefix test-,$(RTL_TESTS)): test-%: check-tools
 	$(MAKE) -C tb/$* SIM=$(SIM)
@@ -87,7 +98,7 @@ check-tools:
 	@command -v cocotb-config >/dev/null || { echo "cocotb not found (make install)"; exit 1; }
 
 clean:
-	for t in $(RTL_TESTS) sidik_avmm; do \
+	for t in $(RTL_TESTS) sidik_avmm sidik_system; do \
 		$(MAKE) -C tb/$$t clean; \
 		rm -f tb/$$t/results.xml tb/$$t/tb.vcd; \
 	done
