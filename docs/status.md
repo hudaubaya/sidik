@@ -1,7 +1,8 @@
 # Laporan status proyek SIDIK
 
-Rekap pekerjaan PR #1 – #13, per 4 Oktober 2026 (UTC), main di commit
-`17fd151`. Laporan ini adalah potret pada tanggal tersebut. Perbarui atau
+Rekap pekerjaan PR #1 – #14, per 6 Oktober 2026 (UTC), main di commit
+`23f7bc1`. Sejak 4 Oktober tidak ada perubahan kode; PR #14 hanya berisi
+laporan ini. Laporan ini adalah potret pada tanggal tersebut. Perbarui atau
 tandai usang setelah ada perubahan besar, terutama setelah ada data board.
 
 > **Belum ada satu pun hasil dari hardware.** Semua angka PUF di laporan ini
@@ -84,7 +85,7 @@ kegagalan dan mode enrollment.
 | Verifier (`sw/verifier.py`, `sidik_verifier.c`) | <ul><li>17 test terhadap model perangkat (`sw/sidik_sim.py`)</li><li>C dan Python berbagi satu database</li><li>CRP ditandai terpakai dan disimpan sebelum challenge dikirim</li><li>konstanta register dicocokkan dengan RTL, header C dan `fpga/release`</li></ul> | Transport `/dev/mem` dan JTAG di board |
 | Rilis FPGA (`fpga/release/`) | <ul><li>11 test offline: skrip Platform Designer, assignment Quartus, QSF dan SDC dijalankan di tclsh dengan stub perekam</li><li>anggota LogicLock dan target synchronizer cocok dengan hierarki RTL</li><li>top level dan sumber komponen terkompilasi (iverilog)</li><li>bridge System Console diuji terhadap mock</li></ul> | Kompilasi Quartus; nama instans GHRD (asumsi); muat atau tidaknya dua instans; timing |
 
-## 3. Riwayat pekerjaan (PR #1 – #13)
+## 3. Riwayat pekerjaan (PR #1 – #14)
 
 Semua PR di-merge setelah CI hijau. Durasi adalah run CI di main setelah
 merge. Tanggal dalam UTC.
@@ -104,6 +105,7 @@ merge. Tanggal dalam UTC.
 | 11 | 4 Okt | `rtl/sidik_crypto.v`: derivasi K, HMAC, ID, KCV di atas Shaman, latensi tetap, uji 1.000 kasus | hijau, 7 mnt 23 dtk |
 | 12 | 4 Okt | <ul><li>`rtl/sidik_avmm.v`: register Avalon-MM, build rilis/`CHAR_BUILD`, tamper dan clear asinkron</li><li>port `zeroize` di `fuzzy_ext`/`sidik_crypto`</li><li>simulasi `ro_array` ~4× lebih cepat</li><li>batas waktu CI 30 menit</li></ul> | hijau, 6 mnt 57 dtk |
 | 13 | 4 Okt | <ul><li>laporan status sampai PR #12</li><li>`fpga/release/`: komponen `sidik`, dua instans di dua region LogicLock, LW HPS bridge + JTAG, KEY0 tamper</li><li>`sw/verifier.py`, `sidik_verifier.c`, `sidik_sim.py`</li><li>`tb/sidik_system`: simulasi sistem gabungan</li><li>parameter simulasi `RO_INDEX_BASE`</li></ul> | hijau, 14 mnt 53 dtk |
+| 14 | 4 Okt | Laporan status sampai PR #13; estimasi sumber daya Cyclone V (yosys `synth_intel_alm`) | hijau, 13 mnt 17 dtk |
 
 ## 4. Temuan model (label: model)
 
@@ -285,7 +287,7 @@ kegagalan < 3/n".
 | Nama instans GHRD diasumsikan | `add_to_ghrd.tcl` gagal atau terhubung ke master yang salah | Override lewat `--cmd`; periksa peta alamat (window 0x40000–0x401FF harus kosong) |
 | Database verifier menyimpan respons | Siapa pun yang membaca atau mengubahnya (misalnya mengembalikan flag `used`) bisa memutar ulang respons | Simpan seperti kunci rahasia; batasi akses dan cadangkan dengan integritas |
 | Demo kloning di simulasi memakai RO perilaku lain | Membuktikan alur verifier, bukan keunikan chip nyata | Ulangi demo di board dengan larik A dan B nyata |
-| Waktu CI | ~15 menit per run setelah PR #13 (dua kali lipat PR #12), batas 30 menit | Kurangi kasus di PR, jalankan penuh di main bila perlu |
+| Waktu CI | ~13–15 menit per run setelah PR #13 (dua kali lipat PR #12), batas 30 menit; PR yang hanya mengubah dokumen (#14) tetap menjalankan seluruh suite | Lewati CI untuk perubahan `docs/` saja (filter path di workflow); kurangi kasus di PR, jalankan penuh di main bila perlu |
 | Lisensi GPL-3.0 (Shaman) | Rilis yang memuat Shaman wajib GPL-3.0 | Lihat [`baselines.md`](baselines.md) |
 
 ## 9. Langkah berikutnya (urut prioritas)
